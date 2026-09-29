@@ -18,6 +18,17 @@ CloudFormation upload that its owner can run alone.
 4. To **add or remove a bucket later**, the owner edits one field and runs a stack
    **Update**. The Lambda reconciles the changes. There's no new stack, key or queue.
 
+## Onboarding builder
+
+A single-page tool in [`docs/onboarding-builder/index.html`](docs/onboarding-builder/index.html).
+Describe a source (tag, region, buckets, access mode) and it checks the input with the
+stack's own rules. It then gives you the template parameters, a fresh ExternalId, the
+prefill and deploy commands, the consumer config entry, and a ready-to-send note for the
+account owner. It runs entirely in your browser: open the file locally, nothing is sent
+anywhere.
+
+![Onboarding builder](docs/img/onboarding-builder.png)
+
 ## Why event-driven instead of polling
 
 | | Polling the CloudWatch Logs API or listing buckets | S3 → SQS events (this project) |
@@ -74,6 +85,7 @@ docker run --rm -v "$PWD/config:/config" -e EXTERNAL_ID_ACME_PROD log-ingest
 | `tools/discover_log_sources.py` | Read-only discovery of where an account's logs land |
 | `tools/prefill_template.py` | Pre-fills the template for one source and prints the matching config |
 | `tools/build_template.py` | Embeds the Lambda into the template, minified to fit the inline limit |
+| `docs/onboarding-builder/` | Browser-only onboarding builder page (open `index.html`) |
 | `tests/` | 43 tests against simulated AWS (moto), including the minified embedded Lambda |
 | `docs/` | [Architecture](docs/ARCHITECTURE.md) · [Onboarding](docs/ONBOARDING.md) · [Log sources](docs/LOG-SOURCES.md) · [Operations](docs/OPERATIONS.md) |
 

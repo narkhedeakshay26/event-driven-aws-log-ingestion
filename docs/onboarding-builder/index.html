@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<title>S3 Log Onboarding Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one left-aligned engineering column; the flow diagram spans it, then a form | output workbench that stacks on phones. */
+:root {
+  --bg: #F3F5F7; --surface: #FFFFFF; --panel: #E9EEF2; --ink: #17212B; --muted: #566270;
+  --line: #7F8A98; --rule: #D3DAE1; --accent: #0B7A83; --accent-ink: #FFFFFF; --warn: #B45309;
+  --ok: #2E7D32; --err: #B42318; --code: #EEF2F5;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0E1318; --surface: #151C23; --panel: #1A232C; --ink: #E3E9EF; --muted: #9AA6B3;
+  --line: #75818F; --rule: #2A3540; --accent: #3DB5BE; --accent-ink: #0E1318; --warn: #F0A030;
+  --ok: #62BD67; --err: #F47C74; --code: #10171D; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0E1318; --surface: #151C23; --panel: #1A232C; --ink: #E3E9EF; --muted: #9AA6B3;
+  --line: #75818F; --rule: #2A3540; --accent: #3DB5BE; --accent-ink: #0E1318; --warn: #F0A030;
+  --ok: #62BD67; --err: #F47C74; --code: #10171D; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 36px 64px; display: grid; gap: 40px }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; text-wrap: balance; margin: 0; line-height: 1.15 }
+h1 { font-size: clamp(30px, 4.4vw, 46px); letter-spacing: -0.01em }
+h2 { font-size: 24px }
+h3 { font-size: 15px; font-family: var(--f-body); font-weight: 600 }
+p { margin: 0; max-width: 68ch }
+.eyebrow { font: 500 12px/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent) }
+.lede { font-size: 17px; color: var(--muted) }
+header { display: grid; gap: 14px }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 13px var(--f-mono); color: var(--muted) }
+.meta a { color: var(--accent) }
+section { display: grid; gap: 16px }
+.sec-head { display: grid; gap: 6px }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 18px; display: grid; gap: 12px }
+.diagram { overflow-x: auto }
+.diagram svg { display: block; width: 100%; min-width: 760px; height: auto }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 90ch }
+.key { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; white-space: nowrap }
+.key i { width: 18px; height: 0; border-top: 2px solid var(--line); display: inline-block }
+.key i.acc { border-color: var(--accent) } .key i.warn { border-color: var(--warn) } .key i.dash { border-top-style: dashed }
+
+.bench { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; align-items: start }
+@media (max-width: 900px) { .bench { grid-template-columns: minmax(0, 1fr) } }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 20px; display: grid; gap: 18px; min-width: 0 }
+.example { font: 12px var(--f-mono); color: var(--muted); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center }
+fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 12px; min-width: 0 }
+legend { font: 600 12px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; padding: 0 }
+label { display: grid; gap: 5px; font-size: 13px; font-weight: 500 }
+.hint { font-weight: 400; color: var(--muted); font-size: 12.5px }
+input, select { font: 14px var(--f-mono); color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 7px; padding: 8px 10px; width: 100%; min-width: 0 }
+input:focus-visible, select:focus-visible, button:focus-visible, .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+input[aria-invalid="true"] { border-color: var(--err) }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+.mode { border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-weight: 400 }
+.mode input { width: auto; margin-top: 3px }
+.mode:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent) }
+.mode b { display: block; font-weight: 600; font-size: 13.5px }
+.inline { display: flex; gap: 8px } .inline input { flex: 1 }
+.buckets { display: grid; gap: 8px }
+.brow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 8.5em) auto; gap: 6px; align-items: center; padding: 10px; border: 1px solid var(--rule); border-radius: 8px }
+.brow .bname { grid-column: 1 / -1 }
+@media (max-width: 480px) { .row2, .modes { grid-template-columns: 1fr } }
+button { font: 500 13px var(--f-body); border-radius: 7px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); padding: 7px 12px; cursor: pointer }
+button:hover { border-color: var(--accent) }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.x { padding: 6px 9px; color: var(--muted) }
+
+.status { display: flex; flex-wrap: wrap; gap: 6px }
+.chip { font: 500 12px var(--f-mono); padding: 4px 9px; border-radius: 999px; border: 1px solid currentColor }
+.chip.ok { color: var(--ok) } .chip.err { color: var(--err) } .chip.warn { color: var(--warn) }
+.params { width: 100%; border-collapse: collapse; font-size: 13px }
+.params th { text-align: left; font: 500 12px var(--f-mono); color: var(--muted); padding: 7px 10px 7px 0; vertical-align: top; white-space: nowrap; border-top: 1px solid var(--rule) }
+.params td { font: 13px var(--f-mono); padding: 7px 0; border-top: 1px solid var(--rule); word-break: break-all }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--rule) }
+.tab { font: 500 13px var(--f-body); border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 10px; color: var(--muted) }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent) }
+.out { position: relative; min-width: 0 }
+pre { margin: 0; background: var(--code); border: 1px solid var(--rule); border-radius: 8px; padding: 40px 14px 14px; overflow-x: auto; font: 12.5px/1.6 var(--f-mono); white-space: pre; tab-size: 2 }
+pre.wrap-text { white-space: pre-wrap; font-family: var(--f-body); font-size: 13.5px; line-height: 1.6 }
+.copy { position: absolute; top: 8px; right: 8px; font-size: 12px; padding: 4px 9px }
+.note { font-size: 13px; color: var(--muted) }
+
+.ref { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 620px }
+.ref th, .ref td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top }
+.ref th { font: 500 12px var(--f-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em }
+.ref code, p code, li code { font: 12.5px var(--f-mono); background: var(--code); padding: 1px 5px; border-radius: 4px }
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 6px 18px }
+.yes { color: var(--ok); font-weight: 600 } .no { color: var(--warn); font-weight: 600 }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; list-style: none; padding: 0; margin: 0; counter-reset: s }
+.steps li { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; counter-increment: s; display: grid; gap: 6px; font-size: 13.5px; min-width: 0 }
+.steps li::before { content: counter(s); font: 600 12px var(--f-mono); color: var(--accent) }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 16px }
+@media (prefers-reduced-motion: no-preference) { .tab, button, .mode { transition: border-color .15s, background .15s, color .15s } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">S3 → SQS → consumer</span>
+    <h1>S3 Log Onboarding Builder</h1>
+    <p class="lede">Onboard an AWS account's logs with one CloudFormation upload. Describe the source below and get the pre-filled parameters, the commands, the consumer config and the note to send the account owner. Nothing leaves this page.</p>
+    <div class="meta"><span>Project: <a href="https://github.com/narkhedeakshay26/event-driven-aws-log-ingestion" target="_blank" rel="noopener">event-driven-aws-log-ingestion</a></span><span>Template: cloudformation/onboarding-stack.yaml</span></div>
+  </header>
+
+  <section aria-labelledby="flow-h">
+    <div class="sec-head"><h2 id="flow-h">How a log file travels</h2>
+      <p class="note">New objects raise an event, the queue buffers it, and the consumer reads the object through a role scoped to exactly the listed buckets.</p></div>
+    <figure>
+      <div class="diagram"><svg viewBox="0 0 1000 470" role="img" aria-label="Event-driven ingestion: S3 log buckets in the source account notify an SQS queue; a consumer in the ingesting account assumes a reader role, drains the queue, fetches each object and writes parsed events to a sink."><defs><marker id="a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--line)"/></marker><marker id="a-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--accent)"/></marker><marker id="a-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--warn)"/></marker></defs><rect x="16" y="40" width="620" height="414" rx="10" stroke-width="1" style="fill:var(--panel);stroke:var(--line)"/><text x="34" y="30" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="0.08em" style="fill:var(--muted)">SOURCE AWS ACCOUNT · ONE STACK PER ACCOUNT + REGION</text><text x="34" y="64" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="11" style="fill:var(--muted)">CloudFormation stack  log-ingest-&lt;tag&gt;</text><rect x="664" y="40" width="320" height="414" rx="10" stroke-width="1" style="fill:var(--panel);stroke:var(--line)"/><text x="682" y="30" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="0.08em" style="fill:var(--muted)">INGESTING SIDE · RUNS ANYWHERE</text><rect x="34" y="96" width="132" height="38" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="100.0" y="119.5" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">CloudTrail</text><polyline points="166,115 206,115" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--line)"/><rect x="34" y="154" width="132" height="38" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="100.0" y="177.5" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">VPC Flow Logs</text><polyline points="166,173 206,173" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--line)"/><rect x="34" y="212" width="132" height="38" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="100.0" y="235.5" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">ALB · WAF · Config</text><polyline points="166,231 206,231" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="186" y="88" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">deliver</text><rect x="210" y="86" width="130" height="164" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="275.0" y="166.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">S3 log buckets</text><text x="275.0" y="181.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">BucketNames</text><polyline points="340,150 428,150" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--accent)"/><text x="384" y="140" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">ObjectCreated</text><text x="384" y="170" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">prefix filter</text><rect x="432" y="126" width="150" height="48" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--accent)"/><text x="507.0" y="148.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">SQS queue</text><text x="507.0" y="163.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">long-poll · SSE</text><polyline points="507,174 507,226" fill="none" stroke-width="1.6" marker-end="url(#a-warn)" style="stroke:var(--warn)"/><text x="517" y="205" text-anchor="start" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--warn)">after 5 failed receives</text><rect x="432" y="230" width="150" height="44" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--warn)"/><text x="507.0" y="250.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Dead-letter queue</text><text x="507.0" y="265.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">14-day hold</text><rect x="210" y="338" width="150" height="48" rx="6" stroke-width="1.4" stroke-dasharray="5 4" style="fill:var(--surface);stroke:var(--ink)"/><text x="285.0" y="360.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Bucket manager</text><text x="285.0" y="375.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">custom resource</text><polyline points="275,338 275,254" fill="none" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="283" y="300" text-anchor="start" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">wires notifications</text><rect x="432" y="338" width="150" height="48" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="507.0" y="360.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Reader role</text><text x="507.0" y="375.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">sts:ExternalId</text><polyline points="360,362 428,362" fill="none" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="394" y="328" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">scopes GetObject</text><text x="34" y="420" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">Create / Update / Delete of the stack re-runs the manager:</text><text x="34" y="437" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">add a bucket = edit BucketNames, no new stack, key or queue.</text><rect x="700" y="126" width="160" height="48" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--accent)"/><text x="780.0" y="148.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Consumer</text><text x="780.0" y="163.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">thread per source</text><polyline points="700,150 586,150" fill="none" stroke-width="1.6" marker-end="url(#a-acc)" style="stroke:var(--accent)"/><text x="643" y="140" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">receive · delete</text><polyline points="780,126 780,76 275,76 275,84" fill="none" stroke-width="1.6" marker-end="url(#a-acc)" style="stroke:var(--accent)"/><text x="528" y="70" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">GetObject (after assume-role)</text><polyline points="700,164 682,164 682,362 586,362" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="620" y="404" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">AssumeRole + ExternalId</text><rect x="700" y="230" width="160" height="44" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="780.0" y="250.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Parsers</text><text x="780.0" y="265.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">one per log type</text><polyline points="820,174 820,226" fill="none" stroke-width="1.6" marker-end="url(#a-acc)" style="stroke:var(--accent)"/><text x="828" y="205" text-anchor="start" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">object bytes</text><rect x="880" y="300" width="90" height="44" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="925.0" y="320.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Sink</text><text x="925.0" y="335.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">kafka · file</text><polyline points="860,252 925,252 925,296" fill="none" stroke-width="1.6" marker-end="url(#a-acc)" style="stroke:var(--accent)"/><text x="900" y="244" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">events</text><text x="700" y="420" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">Message deleted only after the sink</text><text x="700" y="437" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">accepts every event (at-least-once).</text><line x1="700" y1="454" x2="700" y2="454" stroke="none"/></svg>
+</div>
+      <figcaption>
+        <span class="key"><i class="acc"></i>data path</span><span class="key"><i class="warn"></i>failure path</span><span class="key"><i class="dash"></i>set up on stack create or update</span><br>
+        The bucket manager runs on every Create, Update and Delete of the stack. It wires the S3 notifications and rewrites the reader's policy, so changing the bucket list never needs a new stack, key or queue.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="build-h">
+    <div class="sec-head"><h2 id="build-h">Build an onboarding</h2>
+      <p class="note">The checks match the stack's own validation, so what passes here passes in CloudFormation.</p></div>
+    <div class="bench">
+      <form class="card" id="f" autocomplete="off" novalidate>
+        <div class="example"><span id="exampleNote">Example values for a fictional source, acme-prod</span><button type="button" id="clear">Clear form</button></div>
+        <fieldset>
+          <legend>Source</legend>
+          <div class="row2">
+            <label for="tag">Source tag <span class="hint">3-30 chars, a-z 0-9 -</span><input id="tag" value="acme-prod" spellcheck="false"></label>
+            <label for="region">Bucket region
+              <select id="region">
+                <option>us-east-1</option><option>us-east-2</option><option>us-west-1</option><option>us-west-2</option>
+                <option>ca-central-1</option><option>eu-west-1</option><option>eu-west-2</option><option>eu-central-1</option>
+                <option>ap-south-1</option><option>ap-southeast-1</option><option>ap-southeast-2</option><option>ap-northeast-1</option><option>sa-east-1</option>
+              </select></label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Buckets</legend>
+          <div class="buckets" id="buckets">
+            <p class="hint">One row per bucket: name, then an optional key prefix (blank = whole bucket) and the parser.</p>
+          </div>
+          <div><button type="button" id="addBucket">Add bucket</button></div>
+          <label for="kms">KMS key ARNs <span class="hint">only if the logs use SSE-KMS; comma-separated</span><input id="kms" placeholder="arn:aws:kms:us-east-1:111122223333:key/…" spellcheck="false"></label>
+        </fieldset>
+        <fieldset>
+          <legend>Access</legend>
+          <div class="modes" role="radiogroup">
+            <label class="mode" for="mRole"><input type="radio" name="mode" id="mRole" value="CrossAccountRole" checked><span><b>Cross-account role</b><span class="hint">Recommended. No long-lived secret.</span></span></label>
+            <label class="mode" for="mKey"><input type="radio" name="mode" id="mKey" value="AccessKey"><span><b>Access key</b><span class="hint">For consumers outside AWS. Key goes to Secrets Manager.</span></span></label>
+          </div>
+          <div id="roleFields" class="buckets">
+            <label for="principal">Your consumer's principal ARN <span class="hint">the role or account that will assume the reader role</span><input id="principal" value="arn:aws:iam::111122223333:role/log-ingest-consumer" spellcheck="false"></label>
+            <label for="ext">External ID <span class="hint">shared secret, keep it in your secret store</span>
+              <span class="inline"><input id="ext" spellcheck="false"><button type="button" id="regen">New</button></span></label>
+          </div>
+        </fieldset>
+      </form>
+
+      <div class="card" aria-live="polite">
+        <div class="status" id="status"></div>
+        <table class="params"><tbody id="params"></tbody></table>
+        <div class="tabs" role="tablist" id="tabs">
+          <button class="tab" role="tab" aria-selected="true" data-t="prefill" id="t-prefill">Prefill command</button>
+          <button class="tab" role="tab" aria-selected="false" data-t="deploy" id="t-deploy">Deploy (CLI)</button>
+          <button class="tab" role="tab" aria-selected="false" data-t="config" id="t-config">Consumer config</button>
+          <button class="tab" role="tab" aria-selected="false" data-t="note" id="t-note">Note to the owner</button>
+        </div>
+        <div class="out"><pre id="out" role="tabpanel"></pre><button type="button" class="copy" id="copy">Copy</button></div>
+        <p class="note" id="outHint"></p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="life-h">
+    <div class="sec-head"><h2 id="life-h">After it's live</h2></div>
+    <ol class="steps">
+      <li><h3>Add or remove a bucket</h3><span>The owner runs a stack <b>Update</b> with the new BucketNames. You edit the same bucket in <code>sources.yaml</code>. It's picked up within 30 s.</span></li>
+      <li><h3>A bucket is missing on your side</h3><span>The consumer logs a warning and leaves the message. It retries and then waits in the dead-letter queue for 14 days. Nothing is dropped silently.</span></li>
+      <li><h3>Redrive after a fix</h3><span><code>aws sqs start-message-move-task --source-arn &lt;dlq-arn&gt;</code> moves failed messages back to the main queue.</span></li>
+      <li><h3>Offboard</h3><span>The owner deletes the stack. That removes the queue, the role and the bucket notifications, and leaves other notifications alone.</span></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="ref-h">
+    <div class="sec-head"><h2 id="ref-h">Which logs can go straight in</h2>
+      <p class="note">Find each destination with the read-only call shown, or run <code>tools/discover_log_sources.py</code> to run them for you.</p></div>
+    <div class="tablewrap"><table class="ref">
+      <thead><tr><th>Log type</th><th>S3 delivery</th><th>Parser</th><th>Where the bucket is reported</th></tr></thead>
+      <tbody>
+        <tr><td>CloudTrail</td><td class="yes">Native</td><td><code>cloudtrail</code></td><td><code>describe_trails</code> → S3BucketName, S3KeyPrefix</td></tr>
+        <tr><td>VPC Flow Logs</td><td class="yes">Native</td><td><code>vpc_flow</code></td><td><code>describe_flow_logs</code> → LogDestination</td></tr>
+        <tr><td>ALB access logs</td><td class="yes">Native</td><td><code>alb</code></td><td><code>describe_load_balancer_attributes</code> → access_logs.s3.*</td></tr>
+        <tr><td>WAF</td><td class="yes">Native</td><td><code>waf</code></td><td><code>get_logging_configuration</code> → LogDestinationConfigs</td></tr>
+        <tr><td>AWS Config</td><td class="yes">Native</td><td><code>jsonl</code></td><td><code>describe_delivery_channels</code> → s3BucketName</td></tr>
+        <tr><td>CloudWatch Logs groups</td><td class="no">Needs Firehose</td><td><code>jsonl</code></td><td>Subscription filter → Firehose → S3, then list that bucket</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <footer>Built for the open-source project <b>event-driven-aws-log-ingestion</b>. Account IDs such as 111122223333 are AWS's documentation examples.</footer>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const TAG = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
+  const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+  const ARN = /^arn:aws[a-z-]*:iam::\d{12}:(root|role\/.+|user\/.+)$/;
+  const PARSERS = ["cloudtrail", "vpc_flow", "alb", "waf", "jsonl", "text"];
+  const EXAMPLE = [
+    { name: "acme-cloudtrail-logs", prefix: "AWSLogs/", parser: "cloudtrail" },
+    { name: "acme-vpc-flow-logs", prefix: "", parser: "vpc_flow" },
+    { name: "aws-waf-logs-acme", prefix: "", parser: "waf" },
+  ];
+  let tab = "prefill";
+
+  function newExternalId() {
+    const b = new Uint8Array(24); crypto.getRandomValues(b);
+    return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function addRow(b = { name: "", prefix: "", parser: "cloudtrail" }) {
+    const i = $("buckets").querySelectorAll(".brow").length;
+    const row = document.createElement("div");
+    row.className = "brow";
+    row.innerHTML =
+      `<input class="bname" id="bn${i}" aria-label="Bucket name" spellcheck="false" placeholder="my-log-bucket">` +
+      `<input class="bprefix" id="bp${i}" aria-label="Prefix" spellcheck="false" placeholder="prefix (optional)">` +
+      `<select class="bparser" id="bs${i}" aria-label="Parser">${PARSERS.map(p => `<option>${p}</option>`).join("")}</select>` +
+      `<button type="button" class="x" aria-label="Remove bucket">✕</button>`;
+    row.querySelector(".bname").value = b.name;
+    row.querySelector(".bprefix").value = b.prefix;
+    row.querySelector(".bparser").value = b.parser;
+    row.querySelector(".x").addEventListener("click", () => { row.remove(); render(); });
+    $("buckets").appendChild(row);
+  }
+
+  function read() {
+    const buckets = [...$("buckets").querySelectorAll(".brow")].map(r => ({
+      el: r.querySelector(".bname"),
+      name: r.querySelector(".bname").value.trim(),
+      prefix: r.querySelector(".bprefix").value.trim(),
+      parser: r.querySelector(".bparser").value,
+    })).filter(b => b.name || b.prefix);
+    return {
+      tag: $("tag").value.trim(), region: $("region").value, buckets,
+      kms: $("kms").value.split(",").map(s => s.trim()).filter(Boolean),
+      mode: document.querySelector('input[name="mode"]:checked').value,
+      principal: $("principal").value.trim(), ext: $("ext").value.trim(),
+    };
+  }
+
+  function validate(s) {
+    const errs = [];
+    const bad = (el, cond) => el && el.setAttribute("aria-invalid", cond ? "true" : "false");
+    bad($("tag"), !TAG.test(s.tag));
+    if (!TAG.test(s.tag)) errs.push("Source tag: 3-30 lowercase letters, digits or dashes");
+    if (!s.buckets.length) errs.push("Add at least one bucket");
+    const seen = new Set();
+    s.buckets.forEach(b => {
+      const invalid = !BUCKET.test(b.name) || seen.has(b.name);
+      bad(b.el, invalid);
+      if (!BUCKET.test(b.name)) errs.push(`"${b.name || "(blank)"}" isn't a valid bucket name`);
+      else if (seen.has(b.name)) errs.push(`${b.name} is listed twice`);
+      seen.add(b.name);
+    });
+    if (s.mode === "CrossAccountRole") {
+      bad($("principal"), !ARN.test(s.principal));
+      if (!ARN.test(s.principal)) errs.push("Principal ARN should look like arn:aws:iam::123456789012:role/name");
+      bad($("ext"), s.ext.length < 16);
+      if (s.ext.length < 16) errs.push("External ID: use at least 16 characters");
+    }
+    s.kms.forEach(k => { if (!/^arn:aws[a-z-]*:kms:/.test(k)) errs.push(`"${k}" isn't a KMS key ARN`); });
+    return errs;
+  }
+
+  function derive(s) {
+    const prefixes = s.buckets.map(b => b.prefix || "NONE");
+    return {
+      stack: `log-ingest-${s.tag || "<tag>"}`,
+      names: s.buckets.map(b => b.name).join(","),
+      prefixes: prefixes.every(p => p === "NONE") ? "NONE" : prefixes.join(","),
+      kms: s.kms.join(",") || "NONE",
+      env: "EXTERNAL_ID_" + (s.tag || "TAG").toUpperCase().replace(/-/g, "_"),
+    };
+  }
+
+  function outputs(s, d) {
+    const role = s.mode === "CrossAccountRole";
+    const bucketArgs = s.buckets.map(b => `  --bucket ${b.name}${b.prefix ? ":" + b.prefix : ""} \\`).join("\n");
+    const kmsArgs = s.kms.map(k => `  --kms-key ${k} \\`).join("\n");
+    const prefill = ["python3 tools/prefill_template.py \\", `  --source-tag ${s.tag} \\`, bucketArgs, kmsArgs,
+      role ? `  --trusted-principal ${s.principal} \\\n  --external-id "$${d.env}" \\` : "  --access-mode AccessKey \\",
+      `  --region ${s.region} --out ${s.tag}-onboarding.yaml`].filter(Boolean).join("\n");
+    const deploy = [`# Run inside the AWS account that owns the buckets, region ${s.region}`,
+      `aws cloudformation deploy \\`, `  --stack-name ${d.stack} \\`, `  --template-file ${s.tag}-onboarding.yaml \\`,
+      `  --capabilities CAPABILITY_NAMED_IAM \\`, `  --region ${s.region}`, ``,
+      `aws cloudformation describe-stacks --stack-name ${d.stack} --region ${s.region} \\`,
+      `  --query "Stacks[0].Outputs" --output table`].join("\n");
+    const auth = role
+      ? `    auth:\n      role_arn: arn:aws:iam::<ACCOUNT_ID>:role/${d.stack}-reader\n      external_id: \${${d.env}}`
+      : `    auth:\n      access_key_id: \${${d.env.replace("EXTERNAL_ID", "AWS_KEY_ID")}}\n      secret_access_key: \${${d.env.replace("EXTERNAL_ID", "AWS_SECRET")}}`;
+    const config = [`# config/sources.yaml  (replace <ACCOUNT_ID> once the stack exists)`, `sources:`,
+      `  - tenant: ${s.tag}`, `    region: ${s.region}`,
+      `    queue_url: https://sqs.${s.region}.amazonaws.com/<ACCOUNT_ID>/${d.stack}`, auth, `    buckets:`,
+      ...s.buckets.map(b => `      ${b.name}: ${b.parser}`)].join("\n");
+    const back = role ? "QueueUrl and ReaderRoleArn from the Outputs tab. Neither is a secret, so email is fine."
+      : "QueueUrl from the Outputs tab by email. Share the value of the ReaderAccessKeySecretArn secret only through the secure channel we agreed, never by email.";
+    const note = `Hi,
+
+To start sending your AWS logs to us, please deploy the attached CloudFormation template. It takes about 5 minutes.
+
+1. Sign in to the AWS account that owns these buckets: ${s.buckets.map(b => b.name).join(", ") || "(buckets)"}.
+2. Switch to region ${s.region} (top-right corner).
+3. Open CloudFormation, choose Create stack, then With new resources (standard), and upload ${s.tag}-onboarding.yaml.
+4. For Stack name, type: ${d.stack}. The other fields are already filled in; check that the bucket names look right.
+5. Choose Next twice, tick "I acknowledge that AWS CloudFormation might create IAM resources with custom names", then Submit.
+6. When it shows CREATE_COMPLETE, send us ${back}
+
+The stack only creates resources named ${d.stack}. It gives read access to the listed buckets and nothing else, and it keeps any bucket notifications you already have. To add or remove a bucket later, run an Update on this same stack. Please don't create a second one.
+
+Thanks!`;
+    return { prefill, deploy, config, note };
+  }
+
+  const HINTS = {
+    prefill: "Run from the project root. It writes the pre-filled template and prints the same stack name.",
+    deploy: "For owners who prefer the CLI to the console. The second command prints the Outputs to send back.",
+    config: "Paste into config/sources.yaml. The consumer reloads it within 30 seconds, no restart.",
+    note: "Attach the generated template. The note mentions no internal systems, only what happens in their account.",
+  };
+
+  function render() {
+    const s = read();
+    $("roleFields").hidden = s.mode !== "CrossAccountRole";
+    const errs = validate(s);
+    const d = derive(s);
+    $("status").innerHTML = errs.length
+      ? errs.map(e => `<span class="chip err">${e.replace(/</g, "&lt;")}</span>`).join("")
+      : `<span class="chip ok">Ready to send</span><span class="chip ${s.mode === "CrossAccountRole" ? "ok" : "warn"}">${s.mode === "CrossAccountRole" ? "No long-lived secret" : "Long-lived access key"}</span><span class="chip ok">${s.buckets.length} bucket${s.buckets.length === 1 ? "" : "s"} · 1 queue</span>`;
+    const rows = [["Stack name", d.stack], ["SourceTag", s.tag || "—"], ["BucketNames", d.names || "—"],
+      ["BucketPrefixes", d.prefixes], ["KmsKeyArns", d.kms], ["AccessMode", s.mode]];
+    if (s.mode === "CrossAccountRole") rows.push(["TrustedPrincipalArn", s.principal || "—"], ["ExternalId", s.ext ? s.ext.slice(0, 4) + "…" + s.ext.slice(-4) + " (full value in commands)" : "—"]);
+    $("params").innerHTML = rows.map(([k, v]) => `<tr><th>${k}</th><td>${String(v).replace(/</g, "&lt;")}</td></tr>`).join("");
+    const o = outputs(s, d);
+    const text = errs.length ? "# Fix the items above to generate this output." : o[tab];
+    $("out").textContent = s.mode === "CrossAccountRole" && tab === "prefill" && !errs.length
+      ? `export ${d.env}='${s.ext}'   # store this in your secret manager\n\n` + text : text;
+    $("out").classList.toggle("wrap-text", tab === "note" && !errs.length);
+    $("outHint").textContent = HINTS[tab];
+    try { localStorage.setItem("s3-onboarding-draft", JSON.stringify({ ...s, buckets: s.buckets.map(({ el, ...b }) => b) })); } catch (e) {}
+  }
+
+  function load() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem("s3-onboarding-draft") || "null"); } catch (e) {}
+    if (saved && saved.buckets) {
+      $("tag").value = saved.tag || ""; $("region").value = saved.region || "us-east-1";
+      $("kms").value = (saved.kms || []).join(","); $("principal").value = saved.principal || "";
+      $("ext").value = saved.ext || newExternalId();
+      (saved.mode === "AccessKey" ? $("mKey") : $("mRole")).checked = true;
+      saved.buckets.forEach(addRow);
+      if (!saved.buckets.length) addRow();
+      $("exampleNote").textContent = "Restored your last draft (saved in this browser only)";
+    } else {
+      EXAMPLE.forEach(addRow);
+      $("ext").value = newExternalId();
+    }
+  }
+
+  $("f").addEventListener("input", render);
+  $("f").addEventListener("change", render);
+  $("f").addEventListener("submit", e => e.preventDefault());
+  $("addBucket").addEventListener("click", () => { addRow(); render(); });
+  $("regen").addEventListener("click", () => { $("ext").value = newExternalId(); render(); });
+  $("clear").addEventListener("click", () => {
+    $("tag").value = ""; $("kms").value = ""; $("principal").value = ""; $("ext").value = newExternalId();
+    $("buckets").querySelectorAll(".brow").forEach(r => r.remove()); addRow();
+    $("exampleNote").textContent = "Blank form";
+    render();
+  });
+  $("tabs").addEventListener("click", e => {
+    const b = e.target.closest(".tab"); if (!b) return;
+    tab = b.dataset.t;
+    document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", String(t === b)));
+    render();
+  });
+  $("copy").addEventListener("click", () => {
+    const text = $("out").textContent;
+    const done = () => { $("copy").textContent = "Copied"; setTimeout(() => ($("copy").textContent = "Copy"), 1500); };
+    const fallback = () => { const r = document.createRange(); r.selectNodeContents($("out")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); $("copy").textContent = "Press ⌘C / Ctrl+C"; };
+    try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+  });
+
+  load();
+  render();
+})();
+</script>
+</body></html>
