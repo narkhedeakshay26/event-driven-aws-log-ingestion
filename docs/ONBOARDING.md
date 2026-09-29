@@ -16,9 +16,10 @@ only resources named `log-ingest-<account>-<region>`.
 
 1. Sign in to the AWS console for the account that stores the logs.
 2. Open the **onboarding link** you were sent. It opens CloudFormation's **Quick create
-   stack** page, with the template and access settings already filled in.
+   stack** page, with the template and access settings already filled in. If you were
+   sent one link per region, start with the first.
 3. Check the region in the top-right corner is the one your logs are in, and change it
-   if not.
+   if not. A link without a region opens in whichever region you last used.
 4. Under **Which logs to share**, choose **Yes** or **No** for each log type. The stack
    finds where they're stored; you don't need bucket names. Use **Other buckets** only
    for logs AWS doesn't report, for example files copied in by Firehose.
@@ -33,6 +34,8 @@ only resources named `log-ingest-<account>-<region>`.
    - **SkippedSources** lists logs found but stored in another account or region. If
      it's not `none`, repeat these steps there.
 8. Reply with the **AccountId** and **Region** values. They aren't secrets.
+9. If your logs are in more than one region, repeat these steps in each: use that region's
+   link, or open the same link and switch region.
 
 ## Later
 

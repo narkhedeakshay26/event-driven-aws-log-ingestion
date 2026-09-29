@@ -4,11 +4,15 @@
   python3 tools/onboard.py --tenant acme \
       --template-url https://my-bucket.s3.amazonaws.com/log-ingest/onboarding-stack.yaml \
       --trusted-principal arn:aws:iam::111122223333:role/log-ingest-consumer \
-      --region us-east-1 [--account-id 444455556666] [--out acme-onboarding.yaml]
+      [--region us-east-1,eu-west-1] [--account-id 444455556666] [--out acme-onboarding.yaml]
+
+--region is optional. Leave it out and the link opens in whatever region the customer's
+console is using (they switch to where their logs are). Give one or more regions to get
+one link per region, since each region needs its own stack.
 
 Prints:
-  * a CloudFormation quick-create link: the customer clicks it, picks the dropdowns and
-    clicks Create; the ExternalId and trusted principal are already filled in
+  * a CloudFormation quick-create link (one per region): the customer clicks it, picks the
+    dropdowns and clicks Create; the ExternalId and trusted principal are already filled in
   * the ExternalId (generated unless --external-id is given): store it in your secret store
   * the consumer config entry for sources.yaml
 
@@ -25,6 +29,7 @@ from urllib.parse import urlencode
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = ROOT / "cloudformation" / "onboarding-stack.yaml"
+REGION = re.compile(r"^[a-z]{2}(-[a-z]+)+-\d$")
 TENANT = re.compile(r"^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$")
 PRINCIPAL = re.compile(r"^arn:aws[a-z-]*:iam::\d{12}:(root|role/.+|user/.+)$")
 STACK_NAME = "log-ingest"
@@ -34,8 +39,11 @@ DEFAULT_TYPES = "cloudtrail,vpcflow,loadbalancer,waf"
 
 
 def quick_create_url(region, template_url, params):
+    """region=None: no region in the link, so the console uses the customer's current one."""
     query = urlencode({"templateURL": template_url, "stackName": STACK_NAME,
                        **{f"param_{k}": v for k, v in params.items()}})
+    if region is None:
+        return f"https://console.aws.amazon.com/cloudformation/home#/stacks/quickcreate?{query}"
     return (f"https://{region}.console.aws.amazon.com/cloudformation/home?region={region}"
             f"#/stacks/quickcreate?{query}")
 
@@ -62,7 +70,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--tenant", required=True, help="your name for this customer, e.g. acme")
     ap.add_argument("--trusted-principal", required=True, help="your consumer's role ARN (same for every customer)")
-    ap.add_argument("--region", required=True, help="region the customer's log buckets are in")
+    ap.add_argument("--region", default="",
+                    help="region(s) the customer's logs are in, comma-separated; omit to let the customer choose")
     ap.add_argument("--template-url", help="S3 URL of your hosted onboarding-stack.yaml (for the link)")
     ap.add_argument("--account-id", default="", help="customer's AWS account ID, if known")
     ap.add_argument("--external-id", default="")
@@ -78,6 +87,10 @@ def main(argv=None):
         sys.exit("--trusted-principal must be an IAM role, user or account-root ARN")
     if a.account_id and not re.fullmatch(r"\d{12}", a.account_id):
         sys.exit("--account-id must be 12 digits")
+    regions = list(dict.fromkeys(r.strip() for r in a.region.split(",") if r.strip()))
+    bad = [r for r in regions if not REGION.match(r)]
+    if bad:
+        sys.exit(f"--region: {', '.join(bad)} doesn't look like an AWS region (e.g. us-east-1)")
     if not (a.template_url or a.out):
         sys.exit("give --template-url (for a link), --out (for a file), or both")
     chosen = {t.strip() for t in a.log_types.split(",") if t.strip()}
@@ -90,19 +103,27 @@ def main(argv=None):
     env = "EXTERNAL_ID_" + a.tenant.upper().replace("-", "_")
 
     if a.template_url:
-        print("Onboarding link (send to the customer's AWS admin):\n")
-        print("  " + quick_create_url(a.region, a.template_url, params))
+        if not regions:
+            print("Onboarding link (opens in the customer's current region; they switch to where "
+                  "their logs are, and open it again in each region that has logs):\n")
+            print("  " + quick_create_url(None, a.template_url, params))
+        else:
+            print(f"Onboarding link{'s, one per region' if len(regions) > 1 else ''}:\n")
+            for r in regions:
+                print(f"  {r}: " + quick_create_url(r, a.template_url, params))
     if a.out:
         text = TEMPLATE.read_text()
         for k, v in params.items():
             text = set_default(text, k, v)
         Path(a.out).write_text(text)
-        print(f"\nPre-filled template written to {a.out}")
+        print(f"\nPre-filled template written to {a.out} (works in any region)")
 
-    print(f"\nExternalId: store it in your secret manager and export it as {env}:\n  {external_id}")
-    print("\nConsumer config entry (config/sources.yaml):")
-    print(f"  - tenant: {a.tenant}\n    account_id: \"{a.account_id or '<ACCOUNT_ID from the stack Outputs>'}\"")
-    print(f"    region: {a.region}\n    auth:\n      external_id: ${{{env}}}\n    buckets: auto")
+    print(f"\nExternalId (the same for all of this customer's regions): store it in your secret "
+          f"manager and export it as {env}:\n  {external_id}")
+    print("\nConsumer config (config/sources.yaml), one entry per region the customer deploys in:")
+    for r in regions or ["<Region from their Outputs tab>"]:
+        print(f"  - tenant: {a.tenant}\n    account_id: \"{a.account_id or '<AccountId from their Outputs tab>'}\"")
+        print(f"    region: {r}\n    auth:\n      external_id: ${{{env}}}\n    buckets: auto")
 
 
 if __name__ == "__main__":

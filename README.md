@@ -38,9 +38,9 @@ buckets itself.
 ## Onboarding builder
 
 A single-page tool in [`docs/onboarding-builder/index.html`](docs/onboarding-builder/index.html),
-the browser version of `tools/onboard.py`. Enter a customer name and region, choose
-which dropdowns to pre-select, and it generates the quick-create link with a fresh
-ExternalId, the matching `onboard.py` command, the consumer config entry and a
+the browser version of `tools/onboard.py`. Enter a customer name, let them choose the
+region or tick the regions they use, choose which dropdowns to pre-select, and it
+generates the quick-create link (one per region) with a fresh ExternalId, the matching `onboard.py` command, the consumer config entry and a
 ready-to-send note. It runs entirely in your browser: open the file locally, nothing is
 sent anywhere.
 
@@ -69,12 +69,15 @@ The file holds no secrets, so it can be public-read (quick-create links need tha
 
 **2. For each customer, generate their link:**
 ```bash
-python3 tools/onboard.py --tenant acme --region us-east-1 \
+python3 tools/onboard.py --tenant acme \
   --trusted-principal arn:aws:iam::111122223333:role/log-ingest-consumer \
   --template-url https://my-public-templates.s3.amazonaws.com/log-ingest/onboarding-stack.yaml
 ```
-It prints the link, a new ExternalId to keep in your secret store, and a four-line
-consumer config entry. Send the link with the [customer guide](docs/ONBOARDING.md).
+It prints the link, a new ExternalId to keep in your secret store, and the consumer
+config entry. With no `--region`, the link opens in whatever region the customer is
+using, and they switch to where their logs are. If you know their regions, pass
+`--region us-east-1,eu-west-1` for one link per region (each region needs its own stack;
+all of them share the customer's one ExternalId). Send the link with the [customer guide](docs/ONBOARDING.md).
 
 **3. The customer** clicks the link, picks the dropdowns and clicks Create. They reply
 with the **AccountId** and **Region** from the Outputs tab.
@@ -101,7 +104,7 @@ docker run --rm -v "$PWD/config:/config" -e EXTERNAL_ID_ACME log-ingest
 | `tools/onboard.py` | Per-customer quick-create link, ExternalId and consumer config entry |
 | `tools/build_template.py` | Embeds the Lambda into the template and bakes in your consumer principal |
 | `docs/onboarding-builder/` | Browser-only onboarding builder page (open `index.html`) |
-| `tests/` | 53 tests against a simulated AWS account (moto), including the code embedded in the template |
+| `tests/` | 56 tests against a simulated AWS account (moto), including the code embedded in the template |
 | `docs/` | [Architecture](docs/ARCHITECTURE.md) · [Onboarding](docs/ONBOARDING.md) · [Log sources](docs/LOG-SOURCES.md) · [Operations](docs/OPERATIONS.md) |
 
 ## Design highlights

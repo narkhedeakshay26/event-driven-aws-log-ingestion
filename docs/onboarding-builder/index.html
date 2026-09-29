@@ -66,6 +66,10 @@ input[aria-invalid="true"] { border-color: var(--err) }
 .tog { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; font-weight: 400; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px }
 .tog select { width: auto; font-size: 13px; padding: 5px 8px }
 .tog small { display: block; color: var(--muted); font-size: 12px }
+.regions { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px }
+.reg { display: flex; gap: 8px; align-items: center; font: 13px var(--f-mono); font-weight: 400; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 7px; cursor: pointer }
+.reg input { width: auto }
+.reg:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent) }
 .linkbox { font: 12.5px/1.5 var(--f-mono); word-break: break-all; white-space: pre-wrap }
 .mode:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent) }
 .mode b { display: block; font-weight: 600; font-size: 13.5px }
@@ -138,16 +142,18 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
           <legend>Customer</legend>
           <div class="row2">
             <label for="tenant">Customer name <span class="hint">your label, a-z 0-9 -</span><input id="tenant" value="acme" spellcheck="false"></label>
-            <label for="region">Their log region
-              <select id="region">
-                <option>us-east-1</option><option>us-east-2</option><option>us-west-1</option><option>us-west-2</option>
-                <option>ca-central-1</option><option>eu-west-1</option><option>eu-west-2</option><option>eu-central-1</option>
-                <option>ap-south-1</option><option>ap-southeast-1</option><option>ap-southeast-2</option><option>ap-northeast-1</option><option>sa-east-1</option>
-              </select></label>
+            <label for="acct">Their AWS account ID <span class="hint">optional; they send it back</span><input id="acct" placeholder="444455556666" inputmode="numeric" spellcheck="false"></label>
           </div>
-          <label for="acct">Their AWS account ID <span class="hint">optional; they send it back from the Outputs tab</span><input id="acct" placeholder="444455556666" inputmode="numeric" spellcheck="false"></label>
           <label for="ext">External ID <span class="hint">unique to this customer; keep it in your secret store</span>
             <span class="inline"><input id="ext" spellcheck="false"><button type="button" id="regen">New</button></span></label>
+        </fieldset>
+        <fieldset>
+          <legend>Regions</legend>
+          <div class="modes" role="radiogroup">
+            <label class="mode" for="rAny"><input type="radio" name="rmode" id="rAny" value="any" checked><span><b>Let the customer choose</b><span class="hint">One link. It opens in their current region, and they switch to where their logs are.</span></span></label>
+            <label class="mode" for="rPick"><input type="radio" name="rmode" id="rPick" value="pick"><span><b>Specific regions</b><span class="hint">One link per region you know they use. Each region gets its own stack.</span></span></label>
+          </div>
+          <div class="regions" id="regions" hidden></div>
         </fieldset>
         <fieldset>
           <legend>Dropdowns, pre-selected in the link</legend>
@@ -180,7 +186,7 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     <div class="sec-head"><h2 id="life-h">After it's live</h2></div>
     <ol class="steps">
       <li><h3>The customer adds a log source</h3><span>With AutoRescan = Yes it's wired within a day. Otherwise they run the <code>RescanNow</code> output command or update the stack. Nothing changes on your side.</span></li>
-      <li><h3>Logs in another account</h3><span>The stack names them in <code>SkippedSources</code>. The customer opens the same link in that account; add a second config entry with the same tenant.</span></li>
+      <li><h3>Logs in another account or region</h3><span>The stack names them in <code>SkippedSources</code>. The customer opens the same link there (switching region if needed); add a config entry with the same tenant and ExternalId.</span></li>
       <li><h3>A file can't be classified</h3><span>The consumer leaves it on the queue with a warning. It retries, then waits 14 days in the dead-letter queue. Set <code>default_parser</code> to catch it.</span></li>
       <li><h3>Offboard</h3><span>The customer deletes the stack. That removes the queue, the role and the notifications it added, and leaves their own notifications alone.</span></li>
     </ol>
@@ -218,7 +224,12 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     ["IngestConfigLogs", "AWS Config", "resource changes", "No"],
     ["AutoRescan", "Auto-rescan daily", "wire new sources without an update", "No"],
   ];
+  const REGIONS = ["us-east-1", "us-east-2", "us-west-1", "us-west-2", "ca-central-1", "sa-east-1",
+    "eu-west-1", "eu-west-2", "eu-west-3", "eu-central-1", "eu-north-1", "ap-south-1",
+    "ap-southeast-1", "ap-southeast-2", "ap-northeast-1", "ap-northeast-2", "me-central-1", "af-south-1"];
   let tab = "link";
+  $("regions").innerHTML = REGIONS.map(r =>
+    `<label class="reg" for="rg-${r}"><input type="checkbox" id="rg-${r}" value="${r}">${r}</label>`).join("");
 
   function newExternalId() {
     const b = new Uint8Array(24); crypto.getRandomValues(b);
@@ -231,7 +242,9 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
   function read() {
     const t = {}; TOGGLES.forEach(([id]) => (t[id] = $(id).value));
-    return { tenant: $("tenant").value.trim(), region: $("region").value, acct: $("acct").value.trim(),
+    const rmode = document.querySelector('input[name="rmode"]:checked').value;
+    const regions = rmode === "pick" ? REGIONS.filter(r => $(`rg-${r}`).checked) : [];
+    return { tenant: $("tenant").value.trim(), rmode, regions, acct: $("acct").value.trim(),
              ext: $("ext").value.trim(), tpl: $("tpl").value.trim(), principal: $("principal").value.trim(), t };
   }
 
@@ -240,42 +253,53 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
     const mark = (id, bad) => $(id).setAttribute("aria-invalid", bad ? "true" : "false");
     mark("tenant", !TENANT.test(s.tenant)); if (!TENANT.test(s.tenant)) errs.push("Customer name: 3-30 lowercase letters, digits or dashes");
     mark("acct", s.acct && !/^\d{12}$/.test(s.acct)); if (s.acct && !/^\d{12}$/.test(s.acct)) errs.push("Account ID is 12 digits");
+    if (s.rmode === "pick" && !s.regions.length) errs.push("Tick at least one region, or let the customer choose");
     mark("ext", s.ext.length < 16); if (s.ext.length < 16) errs.push("External ID: use at least 16 characters");
     mark("tpl", !/^https:\/\/[^ ]+\.ya?ml$/.test(s.tpl)); if (!/^https:\/\/[^ ]+\.ya?ml$/.test(s.tpl)) errs.push("Template URL should be an https URL ending in .yaml");
     mark("principal", !ARN.test(s.principal)); if (!ARN.test(s.principal)) errs.push("Principal ARN should look like arn:aws:iam::123456789012:role/name");
     return errs;
   }
 
-  function link(s) {
+  function link(s, region) {
     const q = new URLSearchParams({ templateURL: s.tpl, stackName: "log-ingest",
       param_TrustedPrincipalArn: s.principal, param_ExternalId: s.ext });
     TOGGLES.forEach(([id]) => q.set(`param_${id}`, s.t[id]));
-    return `https://${s.region}.console.aws.amazon.com/cloudformation/home?region=${s.region}#/stacks/quickcreate?${q}`;
+    return region
+      ? `https://${region}.console.aws.amazon.com/cloudformation/home?region=${region}#/stacks/quickcreate?${q}`
+      : `https://console.aws.amazon.com/cloudformation/home#/stacks/quickcreate?${q}`;
   }
+  const links = (s) => s.regions.length ? s.regions.map(r => [r, link(s, r)]) : [[null, link(s, null)]];
 
   function outputs(s) {
     const env = "EXTERNAL_ID_" + s.tenant.toUpperCase().replace(/-/g, "_");
-    const base = s.acct ? `log-ingest-${s.acct}-${s.region}` : "";
     const cli = [`export ${env}='${s.ext}'   # store this in your secret manager`, ``,
-      `python3 tools/onboard.py --tenant ${s.tenant} --region ${s.region} \\`,
+      `python3 tools/onboard.py --tenant ${s.tenant} \\`,
+      s.regions.length ? `  --region ${s.regions.join(",")} \\` : null,
       `  --trusted-principal ${s.principal} \\`, `  --template-url ${s.tpl} \\`,
       s.acct ? `  --account-id ${s.acct} \\` : null,
       `  --log-types ${[["IngestCloudTrail","cloudtrail"],["IngestVpcFlowLogs","vpcflow"],["IngestLoadBalancerLogs","loadbalancer"],["IngestWafLogs","waf"],["IngestConfigLogs","config"]].filter(([id]) => s.t[id] === "Yes").map(([, f]) => f).join(",") || "none"} \\`,
       `  --auto-rescan ${s.t.AutoRescan.toLowerCase()} \\`,
       `  --external-id "$${env}"`].filter(l => l !== null).join("\n");
-    const config = [`# config/sources.yaml`, `sources:`, `  - tenant: ${s.tenant}`,
-      `    account_id: "${s.acct || "<AccountId from their Outputs tab>"}"`, `    region: ${s.region}`,
-      `    auth:`, `      external_id: \${${env}}`, `    buckets: auto   # log types detected from object keys`,
-      base ? `    # queue: https://sqs.${s.region}.amazonaws.com/${s.acct}/${base}\n    # role:  arn:aws:iam::${s.acct}:role/${base}-reader` : null]
-      .filter(l => l !== null).join("\n");
+    const entry = (r) => [`  - tenant: ${s.tenant}`,
+      `    account_id: "${s.acct || "<AccountId from their Outputs tab>"}"`, `    region: ${r || "<Region from their Outputs tab>"}`,
+      `    auth:`, `      external_id: \${${env}}`, `    buckets: auto   # log types detected from object keys`].join("\n");
+    const config = [`# config/sources.yaml: one entry per region the customer deploys in`, `sources:`,
+      ...(s.regions.length ? s.regions : [null]).map(entry)].join("\n");
     const picked = TOGGLES.slice(0, 5).filter(([id]) => s.t[id] === "Yes").map(([, n]) => n);
+    const L = links(s);
+    const intro = L.length > 1
+      ? `To start sharing your AWS logs with us, please open each link below while signed in to the AWS account that stores the logs. Each one sets up one region and takes about 5 minutes.\n\n${L.map(([r, u]) => `${r}:\n${u}`).join("\n\n")}`
+      : `To start sharing your AWS logs with us, please open this link while signed in to the AWS account that stores them. It takes about 5 minutes.\n\n${L[0][1]}`;
+    const regionStep = s.regions.length === 1
+      ? `Check the region in the top-right corner is ${s.regions[0]}.`
+      : s.regions.length > 1
+        ? `Each link opens in its own region (shown in the top-right corner). Repeat the steps below for each.`
+        : `Switch the region in the top-right corner to where your logs are stored. If you have logs in more than one region, open the link again in each of them.`;
     const note = `Hi,
 
-To start sharing your AWS logs with us, please open this link while signed in to the AWS account that stores them. It takes about 5 minutes.
+${intro}
 
-${link(s)}
-
-1. Check the region in the top-right corner is where your logs are (${s.region}).
+1. ${regionStep}
 2. Under "Which logs to share", we've pre-selected ${picked.length ? picked.join(", ") : "nothing yet"}. Change any Yes/No as you like. The stack finds where each log is stored, so you don't need bucket names.
 3. Choose whether to pick up new log sources automatically every day (we set ${s.t.AutoRescan}).
 4. Leave the Access section as it is, tick "I acknowledge that AWS CloudFormation might create IAM resources with custom names", and choose Create stack.
@@ -286,11 +310,12 @@ If SkippedSources in the Outputs isn't "none", some logs are stored in another a
 The stack only creates resources named log-ingest-<account>-<region>. It can read the log buckets it found and nothing else, and it keeps any bucket notifications you already have. To stop sharing, delete the stack.
 
 Thanks!`;
-    return { link: link(s), cli, config, note };
+    const linkText = L.length > 1 ? L.map(([r, u]) => `# ${r}\n${u}`).join("\n\n") : L[0][1];
+    return { link: linkText, cli, config, note };
   }
 
   const HINTS = {
-    link: "Opens CloudFormation's Quick create page with the template, access settings and dropdown choices filled in.",
+    link: "Opens CloudFormation's Quick create page with the template, access settings and dropdown choices filled in. One link per region when you pick specific regions.",
     cli: "The same link from the command line, for scripting. Run from the project root.",
     config: "Paste into config/sources.yaml once they send their account ID. Reloaded within 30 seconds.",
     note: "Ready to send. It mentions only what happens in their account, not your systems.",
@@ -298,12 +323,15 @@ Thanks!`;
 
   function render() {
     const s = read();
+    $("regions").hidden = s.rmode !== "pick";
     const errs = validate(s);
     const on = TOGGLES.slice(0, 5).filter(([id]) => s.t[id] === "Yes").length;
     $("status").innerHTML = errs.length
       ? errs.map(e => `<span class="chip err">${e.replace(/</g, "&lt;")}</span>`).join("")
-      : `<span class="chip ok">Ready to send</span><span class="chip ${on ? "ok" : "warn"}">${on} of 5 log types pre-selected</span><span class="chip ok">AutoRescan ${s.t.AutoRescan}</span>`;
-    const rows = [["Stack name", "log-ingest"], ["Resources", `log-ingest-${s.acct || "<account>"}-${s.region}`],
+      : `<span class="chip ok">Ready to send</span><span class="chip ok">${s.regions.length ? s.regions.length + " region link" + (s.regions.length > 1 ? "s" : "") : "Customer picks region"}</span><span class="chip ${on ? "ok" : "warn"}">${on} of 5 log types pre-selected</span><span class="chip ok">AutoRescan ${s.t.AutoRescan}</span>`;
+    const rows = [["Stack name", "log-ingest"],
+      ["Regions", s.regions.length ? `${s.regions.join(", ")} (${s.regions.length} stack${s.regions.length > 1 ? "s" : ""})` : "customer chooses"],
+      ["Resources", `log-ingest-${s.acct || "<account>"}-<region>`],
       ["Buckets", "discovered by the stack"], ["TrustedPrincipalArn", s.principal || "—"],
       ["ExternalId", s.ext ? s.ext.slice(0, 4) + "…" + s.ext.slice(-4) + " (full value in the link)" : "—"]];
     $("params").innerHTML = rows.map(([k, v]) => `<tr><th>${k}</th><td>${String(v).replace(/</g, "&lt;")}</td></tr>`).join("");
@@ -312,15 +340,16 @@ Thanks!`;
     $("out").classList.toggle("wrap-text", tab === "note" && !errs.length);
     $("out").classList.toggle("linkbox", tab === "link" && !errs.length);
     $("outHint").textContent = HINTS[tab];
-    try { localStorage.setItem("s3-onboarding-draft-v2", JSON.stringify(s)); } catch (e) {}
+    try { localStorage.setItem("s3-onboarding-draft-v3", JSON.stringify(s)); } catch (e) {}
   }
 
   function load() {
     let saved = null;
-    try { saved = JSON.parse(localStorage.getItem("s3-onboarding-draft-v2") || "null"); } catch (e) {}
+    try { saved = JSON.parse(localStorage.getItem("s3-onboarding-draft-v3") || "null"); } catch (e) {}
     if (saved && saved.t) {
       ["tenant", "acct", "ext", "tpl", "principal"].forEach(k => ($(k === "tenant" ? "tenant" : k).value = saved[k] || ""));
-      $("region").value = saved.region || "us-east-1";
+      (saved.rmode === "pick" ? $("rPick") : $("rAny")).checked = true;
+      (saved.regions || []).forEach(r => { const el = $(`rg-${r}`); if (el) el.checked = true; });
       TOGGLES.forEach(([id]) => saved.t[id] && ($(id).value = saved.t[id]));
       if (!$("ext").value) $("ext").value = newExternalId();
       $("exampleNote").textContent = "Restored your last draft (saved in this browser only)";
@@ -335,6 +364,7 @@ Thanks!`;
   $("regen").addEventListener("click", () => { $("ext").value = newExternalId(); render(); });
   $("clear").addEventListener("click", () => {
     $("tenant").value = ""; $("acct").value = ""; $("ext").value = newExternalId();
+    $("rAny").checked = true; REGIONS.forEach(r => ($(`rg-${r}`).checked = false));
     $("exampleNote").textContent = "New customer: the External ID is fresh, your template and principal are kept";
     render();
   });
