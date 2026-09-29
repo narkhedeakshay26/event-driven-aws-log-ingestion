@@ -1,0 +1,35 @@
+# Consumer config. One entry per onboarded source (one CloudFormation stack).
+# Copy to config/sources.yaml (git-ignored). ${VAR} values are read from the environment.
+# The consumer re-reads this file every 30 s: add or remove sources and buckets without a restart.
+
+sink:
+  type: file                 # stdout | file | kafka
+  path: ./out/events.jsonl
+  # type: kafka
+  # bootstrap_servers: broker1:9092,broker2:9092
+  # topic: aws-logs
+  # extra: { security.protocol: SSL }
+
+sources:
+  - tenant: acme-prod                                   # = the stack's SourceTag
+    region: us-east-1
+    queue_url: https://sqs.us-east-1.amazonaws.com/111122223333/log-ingest-acme-prod
+    auth:                                               # CrossAccountRole mode (recommended)
+      role_arn: arn:aws:iam::111122223333:role/log-ingest-acme-prod-reader
+      external_id: ${EXTERNAL_ID_ACME_PROD}
+    buckets:                                            # bucket -> parser; keep in sync with BucketNames
+      acme-cloudtrail-logs: cloudtrail
+      acme-vpc-flow-logs: vpc_flow
+      acme-alb-logs: alb
+      aws-waf-logs-acme: waf
+
+  # A source whose logs live in a second account: its own stack, same tenant, distinct name.
+  - name: acme-log-archive
+    tenant: acme-prod
+    region: us-west-2
+    queue_url: https://sqs.us-west-2.amazonaws.com/444455556666/log-ingest-acme-archive
+    auth:
+      role_arn: arn:aws:iam::444455556666:role/log-ingest-acme-archive-reader
+      external_id: ${EXTERNAL_ID_ACME_ARCHIVE}
+    buckets:
+      acme-org-trail-archive: cloudtrail

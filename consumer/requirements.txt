@@ -1,0 +1,4 @@
+boto3>=1.34
+PyYAML>=6.0
+# optional, only for the kafka sink:
+# confluent-kafka>=2.4

@@ -1,0 +1,4 @@
+-r consumer/requirements.txt
+moto[s3,sqs,iam,sts,cloudtrail,ec2]>=5.0
+pytest>=8
+cfn-lint>=1.0

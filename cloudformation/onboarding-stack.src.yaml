@@ -1,0 +1,249 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Event-driven log ingestion onboarding. Wires the listed S3 log buckets to one SQS
+  queue and grants a read-only reader access to exactly those buckets. Re-run as a
+  stack UPDATE to add or remove buckets. Never create a second stack for the same source.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: "1. What to ingest" }
+        Parameters: [SourceTag, BucketNames, BucketPrefixes, KmsKeyArns]
+      - Label: { default: "2. Who may read it" }
+        Parameters: [AccessMode, TrustedPrincipalArn, ExternalId]
+    ParameterLabels:
+      SourceTag: { default: "Source tag (names every resource; never change later)" }
+      BucketNames: { default: "Log bucket names (comma-separated)" }
+      BucketPrefixes: { default: "Key prefix per bucket (NONE = whole bucket)" }
+      KmsKeyArns: { default: "KMS key ARNs the logs are encrypted with (NONE if SSE-S3)" }
+      AccessMode: { default: "Access mode" }
+      TrustedPrincipalArn: { default: "Ingesting account principal ARN (role mode)" }
+      ExternalId: { default: "External ID (role mode)" }
+
+Parameters:
+  SourceTag:
+    Type: String
+    AllowedPattern: "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$"
+    ConstraintDescription: "3-30 chars: lowercase letters, digits, dashes (e.g. acme-prod)"
+    Description: Short slug used in every resource name, e.g. acme-prod.
+  BucketNames:
+    Type: CommaDelimitedList
+    Default: ""
+    Description: Every bucket to ingest. All must be in this stack's region.
+  BucketPrefixes:
+    Type: CommaDelimitedList
+    Default: "NONE"
+    Description: >-
+      NONE for no filtering, or one entry per bucket in the same order
+      (write NONE for any bucket that needs no filter), e.g. AWSLogs/,NONE
+  KmsKeyArns:
+    Type: CommaDelimitedList
+    Default: "NONE"
+    Description: KMS keys protecting the log objects. The key policy must also allow the reader.
+  AccessMode:
+    Type: String
+    Default: CrossAccountRole
+    AllowedValues: [CrossAccountRole, AccessKey]
+    Description: >-
+      CrossAccountRole (recommended, no long-lived secrets) or AccessKey
+      (an IAM user whose key is stored in Secrets Manager).
+  TrustedPrincipalArn:
+    Type: String
+    Default: ""
+    Description: e.g. arn:aws:iam::111122223333:role/log-ingest-consumer. Required for CrossAccountRole.
+  ExternalId:
+    Type: String
+    Default: ""
+    Description: Shared secret the consumer must present when assuming the role. Required for CrossAccountRole.
+
+Rules:
+  RoleModeNeedsTrust:
+    RuleCondition: !Equals [!Ref AccessMode, CrossAccountRole]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref TrustedPrincipalArn, ""]]
+        AssertDescription: TrustedPrincipalArn is required when AccessMode is CrossAccountRole
+      - Assert: !Not [!Equals [!Ref ExternalId, ""]]
+        AssertDescription: ExternalId is required when AccessMode is CrossAccountRole
+
+Conditions:
+  UseRole: !Equals [!Ref AccessMode, CrossAccountRole]
+  UseKey: !Equals [!Ref AccessMode, AccessKey]
+
+Resources:
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "log-ingest-${SourceTag}-dlq"
+      MessageRetentionPeriod: 1209600        # 14 days to notice and redrive
+      SqsManagedSseEnabled: true
+
+  IngestQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "log-ingest-${SourceTag}"
+      VisibilityTimeout: 300                 # > worst-case time to fetch + parse one object
+      MessageRetentionPeriod: 345600         # 4 days of buffer if the consumer is down
+      ReceiveMessageWaitTimeSeconds: 20      # long polling: fewer, cheaper API calls
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 5
+
+  IngestQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues: [!Ref IngestQueue]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowS3FromThisAccountOnly
+            Effect: Allow
+            Principal: { Service: s3.amazonaws.com }
+            Action: sqs:SendMessage
+            Resource: !GetAtt IngestQueue.Arn
+            Condition:
+              ArnLike: { "aws:SourceArn": "arn:aws:s3:::*" }
+              StringEquals: { "aws:SourceAccount": !Ref AWS::AccountId }
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "sqs:*"
+            Resource: !GetAtt IngestQueue.Arn
+            Condition:
+              Bool: { "aws:SecureTransport": "false" }
+
+  # ---------------------------------------------------------------- reader identity
+  ReaderRole:
+    Type: AWS::IAM::Role
+    Condition: UseRole
+    Properties:
+      RoleName: !Sub "log-ingest-${SourceTag}-reader"
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { AWS: !Ref TrustedPrincipalArn }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: { "sts:ExternalId": !Ref ExternalId }
+      Policies:
+        - PolicyName: consume-queue
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:ChangeMessageVisibility, sqs:GetQueueAttributes]
+                Resource: !GetAtt IngestQueue.Arn
+
+  ReaderUser:
+    Type: AWS::IAM::User
+    Condition: UseKey
+    Properties:
+      UserName: !Sub "log-ingest-${SourceTag}-reader"
+      Policies:
+        - PolicyName: consume-queue
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:ChangeMessageVisibility, sqs:GetQueueAttributes]
+                Resource: !GetAtt IngestQueue.Arn
+
+  ReaderAccessKey:
+    Type: AWS::IAM::AccessKey
+    Condition: UseKey
+    Properties:
+      UserName: !Ref ReaderUser
+
+  ReaderAccessKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: UseKey
+    Properties:
+      Name: !Sub "log-ingest/${SourceTag}/reader-access-key"
+      Description: Access key for the log-ingest reader. Share through a secure channel only.
+      SecretString: !Sub '{"AccessKeyId":"${ReaderAccessKey}","SecretAccessKey":"${ReaderAccessKey.SecretAccessKey}"}'
+
+  # ---------------------------------------------------------------- bucket manager
+  ManagerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: manage-bucket-wiring
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: EditBucketNotifications   # bucket list is dynamic, so this can't be narrowed statically
+                Effect: Allow
+                Action: [s3:GetBucketNotification, s3:PutBucketNotification]
+                Resource: "arn:aws:s3:::*"
+              - Sid: EditReaderInlinePolicyOnly
+                Effect: Allow
+                Action: !If
+                  - UseRole
+                  - [iam:PutRolePolicy, iam:DeleteRolePolicy]
+                  - [iam:PutUserPolicy, iam:DeleteUserPolicy]
+                Resource: !If [UseRole, !GetAtt ReaderRole.Arn, !GetAtt ReaderUser.Arn]
+
+  ManagerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Reconciles S3 notifications and reader permissions with BucketNames
+      Runtime: python3.13
+      Handler: index.handler
+      Timeout: 120
+      MemorySize: 128
+      Role: !GetAtt ManagerRole.Arn
+      Code:
+        ZipFile: |
+          __MANAGER_CODE__
+
+  ManagerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ManagerFunction}"
+      RetentionInDays: 30
+
+  BucketWiring:
+    Type: Custom::BucketWiring
+    DependsOn: [IngestQueuePolicy, ManagerLogGroup]   # S3 checks the queue policy when wiring
+    Properties:
+      ServiceToken: !GetAtt ManagerFunction.Arn
+      ConfigId: !Sub "log-ingest-${SourceTag}"
+      QueueArn: !GetAtt IngestQueue.Arn
+      BucketNames: !Ref BucketNames
+      BucketPrefixes: !Ref BucketPrefixes
+      KmsKeyArns: !Ref KmsKeyArns
+      ReaderRoleName: !If [UseRole, !Ref ReaderRole, ""]
+      ReaderUserName: !If [UseKey, !Ref ReaderUser, ""]
+
+Outputs:
+  SourceTag:
+    Value: !Ref SourceTag
+  Region:
+    Value: !Ref AWS::Region
+  QueueUrl:
+    Value: !Ref IngestQueue
+  DeadLetterQueueUrl:
+    Value: !Ref DeadLetterQueue
+  BucketNames:
+    Description: Buckets currently wired (as reconciled by the manager)
+    Value: !GetAtt BucketWiring.Buckets
+  BucketPrefixes:
+    Value: !Join [",", !Ref BucketPrefixes]
+  ReaderRoleArn:
+    Condition: UseRole
+    Description: Send this to the ingesting team (not a secret)
+    Value: !GetAtt ReaderRole.Arn
+  ReaderAccessKeySecretArn:
+    Condition: UseKey
+    Description: Secrets Manager secret holding the access key. Share its value securely, never by email.
+    Value: !Ref ReaderAccessKeySecret

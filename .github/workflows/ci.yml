@@ -1,0 +1,17 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: pip install -r requirements-dev.txt
+      - name: Template is in sync with the Lambda source
+        run: python tools/build_template.py --check
+      - name: Lint CloudFormation
+        run: cfn-lint cloudformation/onboarding-stack.yaml
+      - name: Tests (simulated AWS, no real account needed)
+        run: pytest -q

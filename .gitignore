@@ -1,0 +1,7 @@
+config/sources.yaml
+*-onboarding.yaml
+out/
+__pycache__/
+.pytest_cache/
+.venv/
+.DS_Store
