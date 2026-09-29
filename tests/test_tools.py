@@ -1,11 +1,12 @@
 import shutil
 import subprocess
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 import yaml
 
 import build_template
-import prefill_template
+import onboard
 
 
 def load(path):
@@ -15,40 +16,72 @@ def load(path):
     return yaml.load(path.read_text(), Loader=Loader)
 
 
-def test_committed_template_matches_lambda_source():
-    text, size = build_template.render()
-    assert (build_template.OUT.read_text() == text), "run tools/build_template.py"
-    assert size <= build_template.LIMIT
+PRINCIPAL = "arn:aws:iam::111122223333:role/log-ingest-consumer"
 
 
-def test_prefill_sets_every_default(tmp_path, capsys):
+def test_committed_template_matches_sources():
+    assert build_template.OUT.read_text() == build_template.render()[0], "run tools/build_template.py"
+
+
+def test_build_can_bake_in_the_trusted_principal(tmp_path):
     out = tmp_path / "t.yaml"
-    prefill_template.main(["--source-tag", "acme-prod", "--bucket", "trail-logs:AWSLogs/",
-                           "--bucket", "flow-logs", "--trusted-principal",
-                           "arn:aws:iam::111122223333:role/consumer", "--out", str(out)])
+    build_template.main(["--trusted-principal", PRINCIPAL, "--out", str(out)])
+    assert load(out)["Parameters"]["TrustedPrincipalArn"]["Default"] == PRINCIPAL
+
+
+def test_onboarding_link_carries_only_per_customer_values(capsys):
+    onboard.main(["--tenant", "acme", "--trusted-principal", PRINCIPAL, "--region", "eu-west-1",
+                  "--template-url", "https://bkt.s3.amazonaws.com/log-ingest/onboarding-stack.yaml"])
+    out = capsys.readouterr().out
+    link = next(l.strip() for l in out.splitlines() if l.strip().startswith("https://eu-west-1.console"))
+    fragment = urlsplit(link).fragment
+    assert fragment.startswith("/stacks/quickcreate?")
+    q = parse_qs(fragment.split("?", 1)[1])
+    assert q["templateURL"] == ["https://bkt.s3.amazonaws.com/log-ingest/onboarding-stack.yaml"]
+    assert q["stackName"] == ["log-ingest"]
+    assert q["param_TrustedPrincipalArn"] == [PRINCIPAL]
+    assert len(q["param_ExternalId"][0]) >= 24
+    assert q["param_IngestCloudTrail"] == ["Yes"] and q["param_IngestConfigLogs"] == ["No"]
+    assert q["param_AutoRescan"] == ["No"]
+    assert "buckets: auto" in out and "EXTERNAL_ID_ACME" in out
+
+
+def test_each_customer_gets_a_different_external_id(capsys):
+    args = ["--trusted-principal", PRINCIPAL, "--region", "us-east-1", "--template-url", "https://x/t.yaml"]
+    onboard.main(["--tenant", "acme"] + args)
+    onboard.main(["--tenant", "globex"] + args)
+    ids = [l.split("param_ExternalId=")[1].split("&")[0] for l in capsys.readouterr().out.splitlines()
+           if "param_ExternalId=" in l]
+    assert len(ids) == 2 and ids[0] != ids[1]
+
+
+def test_prefilled_file_option(tmp_path):
+    out = tmp_path / "acme.yaml"
+    onboard.main(["--tenant", "acme", "--trusted-principal", PRINCIPAL, "--region", "us-east-1",
+                  "--external-id", "fixed-external-id-123456", "--out", str(out)])
     p = load(out)["Parameters"]
-    assert p["SourceTag"]["Default"] == "acme-prod"
-    assert p["BucketNames"]["Default"] == "trail-logs,flow-logs"
-    assert p["BucketPrefixes"]["Default"] == "AWSLogs/,NONE"
-    assert len(p["ExternalId"]["Default"]) >= 24
-    printed = capsys.readouterr().out
-    assert "log-ingest-acme-prod" in printed and "EXTERNAL_ID_ACME_PROD" in printed
+    assert p["ExternalId"]["Default"] == "fixed-external-id-123456"
+    assert p["IngestCloudTrail"]["AllowedValues"] == ["Yes", "No"]      # dropdowns untouched
     if shutil.which("cfn-lint"):
         subprocess.run(["cfn-lint", str(out)], check=True)
 
 
-def test_prefill_all_none_prefixes_collapse_to_single_none(tmp_path):
-    out = tmp_path / "t.yaml"
-    prefill_template.main(["--source-tag", "acme", "--bucket", "a-logs", "--bucket", "b-logs",
-                           "--access-mode", "AccessKey", "--out", str(out)])
-    assert load(out)["Parameters"]["BucketPrefixes"]["Default"] == "NONE"
+def test_dropdown_preselection(capsys):
+    onboard.main(["--tenant", "acme", "--trusted-principal", PRINCIPAL, "--region", "us-east-1",
+                  "--template-url", "https://x/t.yaml", "--log-types", "cloudtrail,config", "--auto-rescan", "yes"])
+    link = next(l.strip() for l in capsys.readouterr().out.splitlines() if "quickcreate" in l)
+    q = parse_qs(urlsplit(link).fragment.split("?", 1)[1])
+    assert (q["param_IngestCloudTrail"], q["param_IngestConfigLogs"], q["param_IngestWafLogs"],
+            q["param_AutoRescan"]) == (["Yes"], ["Yes"], ["No"], ["Yes"])
 
 
 @pytest.mark.parametrize("args", [
-    ["--source-tag", "Bad_Tag", "--bucket", "ok-bucket"],
-    ["--source-tag", "acme", "--bucket", "ok-bucket", "--bucket", "ok-bucket", "--access-mode", "AccessKey"],
-    ["--source-tag", "acme", "--bucket", "ok-bucket"],       # role mode without trusted principal
+    ["--tenant", "acme", "--trusted-principal", PRINCIPAL, "--region", "r", "--out", "x", "--log-types", "nope"],
+    ["--tenant", "Bad_Tag", "--trusted-principal", PRINCIPAL, "--region", "r", "--out", "x.yaml"],
+    ["--tenant", "acme", "--trusted-principal", "not-an-arn", "--region", "r", "--out", "x.yaml"],
+    ["--tenant", "acme", "--trusted-principal", PRINCIPAL, "--region", "r"],          # no link, no file
+    ["--tenant", "acme", "--trusted-principal", PRINCIPAL, "--region", "r", "--out", "x", "--account-id", "12"],
 ])
-def test_prefill_rejects_bad_input(tmp_path, args):
+def test_onboard_rejects_bad_input(args):
     with pytest.raises(SystemExit):
-        prefill_template.main(args + ["--out", str(tmp_path / "x.yaml")])
+        onboard.main(args)

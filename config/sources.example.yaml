@@ -1,6 +1,6 @@
-# Consumer config. One entry per onboarded source (one CloudFormation stack).
+# Consumer config. One entry per customer stack (one per account + region).
 # Copy to config/sources.yaml (git-ignored). ${VAR} values are read from the environment.
-# The consumer re-reads this file every 30 s: add or remove sources and buckets without a restart.
+# Re-read every 30 s: add or remove customers without a restart.
 
 sink:
   type: file                 # stdout | file | kafka
@@ -11,25 +11,29 @@ sink:
   # extra: { security.protocol: SSL }
 
 sources:
-  - tenant: acme-prod                                   # = the stack's SourceTag
+  # From the shared template, this is all you need. The queue URL and role ARN are
+  # derived from account + region, and log types are detected from each object's key.
+  - tenant: acme
+    account_id: "444455556666"
     region: us-east-1
-    queue_url: https://sqs.us-east-1.amazonaws.com/111122223333/log-ingest-acme-prod
-    auth:                                               # CrossAccountRole mode (recommended)
-      role_arn: arn:aws:iam::111122223333:role/log-ingest-acme-prod-reader
-      external_id: ${EXTERNAL_ID_ACME_PROD}
-    buckets:                                            # bucket -> parser; keep in sync with BucketNames
-      acme-cloudtrail-logs: cloudtrail
-      acme-vpc-flow-logs: vpc_flow
-      acme-alb-logs: alb
-      aws-waf-logs-acme: waf
-
-  # A source whose logs live in a second account: its own stack, same tenant, distinct name.
-  - name: acme-log-archive
-    tenant: acme-prod
-    region: us-west-2
-    queue_url: https://sqs.us-west-2.amazonaws.com/444455556666/log-ingest-acme-archive
     auth:
-      role_arn: arn:aws:iam::444455556666:role/log-ingest-acme-archive-reader
-      external_id: ${EXTERNAL_ID_ACME_ARCHIVE}
-    buckets:
-      acme-org-trail-archive: cloudtrail
+      external_id: ${EXTERNAL_ID_ACME}
+
+  # Same customer, logs in their Control Tower log-archive account: second stack,
+  # same tenant and ExternalId.
+  - tenant: acme
+    account_id: "777788889999"
+    region: us-east-1
+    auth:
+      external_id: ${EXTERNAL_ID_ACME}
+
+  # Optional overrides: pin parsers for specific buckets, and catch files outside
+  # AWS's standard layout (e.g. Firehose output from AdditionalBuckets).
+  - tenant: globex
+    account_id: "111122223333"
+    region: eu-west-1
+    auth:
+      external_id: ${EXTERNAL_ID_GLOBEX}
+    default_parser: jsonl
+    # buckets:                 # instead of auto-detection
+    #   globex-firehose-logs: jsonl

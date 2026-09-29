@@ -62,6 +62,11 @@ input[aria-invalid="true"] { border-color: var(--err) }
 .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
 .mode { border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-weight: 400 }
 .mode input { width: auto; margin-top: 3px }
+.toggles { display: grid; gap: 6px }
+.tog { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; font-weight: 400; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px }
+.tog select { width: auto; font-size: 13px; padding: 5px 8px }
+.tog small { display: block; color: var(--muted); font-size: 12px }
+.linkbox { font: 12.5px/1.5 var(--f-mono); word-break: break-all; white-space: pre-wrap }
 .mode:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent) }
 .mode b { display: block; font-weight: 600; font-size: 13.5px }
 .inline { display: flex; gap: 8px } .inline input { flex: 1 }
@@ -104,62 +109,55 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 
 <div class="wrap">
   <header>
-    <span class="eyebrow">S3 → SQS → consumer</span>
+    <span class="eyebrow">One template · every customer</span>
     <h1>S3 Log Onboarding Builder</h1>
-    <p class="lede">Onboard an AWS account's logs with one CloudFormation upload. Describe the source below and get the pre-filled parameters, the commands, the consumer config and the note to send the account owner. Nothing leaves this page.</p>
+    <p class="lede">Every customer deploys the same CloudFormation template and only picks Yes/No dropdowns. The stack finds their log buckets itself. Here you generate the one per-customer piece, a quick-create link carrying their External ID, plus your consumer config and the note to send. Nothing leaves this page.</p>
     <div class="meta"><span>Project: <a href="https://github.com/narkhedeakshay26/event-driven-aws-log-ingestion" target="_blank" rel="noopener">event-driven-aws-log-ingestion</a></span><span>Template: cloudformation/onboarding-stack.yaml</span></div>
   </header>
 
   <section aria-labelledby="flow-h">
     <div class="sec-head"><h2 id="flow-h">How a log file travels</h2>
-      <p class="note">New objects raise an event, the queue buffers it, and the consumer reads the object through a role scoped to exactly the listed buckets.</p></div>
+      <p class="note">The bucket manager asks the account where its logs go, wires those buckets to one queue, and scopes the reader role to exactly them.</p></div>
     <figure>
-      <div class="diagram"><svg viewBox="0 0 1000 470" role="img" aria-label="Event-driven ingestion: S3 log buckets in the source account notify an SQS queue; a consumer in the ingesting account assumes a reader role, drains the queue, fetches each object and writes parsed events to a sink."><defs><marker id="a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--line)"/></marker><marker id="a-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--accent)"/></marker><marker id="a-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--warn)"/></marker></defs><rect x="16" y="40" width="620" height="414" rx="10" stroke-width="1" style="fill:var(--panel);stroke:var(--line)"/><text x="34" y="30" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="0.08em" style="fill:var(--muted)">SOURCE AWS ACCOUNT · ONE STACK PER ACCOUNT + REGION</text><text x="34" y="64" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="11" style="fill:var(--muted)">CloudFormation stack  log-ingest-&lt;tag&gt;</text><rect x="664" y="40" width="320" height="414" rx="10" stroke-width="1" style="fill:var(--panel);stroke:var(--line)"/><text x="682" y="30" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="0.08em" style="fill:var(--muted)">INGESTING SIDE · RUNS ANYWHERE</text><rect x="34" y="96" width="132" height="38" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="100.0" y="119.5" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">CloudTrail</text><polyline points="166,115 206,115" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--line)"/><rect x="34" y="154" width="132" height="38" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="100.0" y="177.5" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">VPC Flow Logs</text><polyline points="166,173 206,173" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--line)"/><rect x="34" y="212" width="132" height="38" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="100.0" y="235.5" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">ALB · WAF · Config</text><polyline points="166,231 206,231" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="186" y="88" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">deliver</text><rect x="210" y="86" width="130" height="164" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="275.0" y="166.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">S3 log buckets</text><text x="275.0" y="181.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">BucketNames</text><polyline points="340,150 428,150" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--accent)"/><text x="384" y="140" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">ObjectCreated</text><text x="384" y="170" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">prefix filter</text><rect x="432" y="126" width="150" height="48" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--accent)"/><text x="507.0" y="148.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">SQS queue</text><text x="507.0" y="163.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">long-poll · SSE</text><polyline points="507,174 507,226" fill="none" stroke-width="1.6" marker-end="url(#a-warn)" style="stroke:var(--warn)"/><text x="517" y="205" text-anchor="start" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--warn)">after 5 failed receives</text><rect x="432" y="230" width="150" height="44" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--warn)"/><text x="507.0" y="250.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Dead-letter queue</text><text x="507.0" y="265.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">14-day hold</text><rect x="210" y="338" width="150" height="48" rx="6" stroke-width="1.4" stroke-dasharray="5 4" style="fill:var(--surface);stroke:var(--ink)"/><text x="285.0" y="360.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Bucket manager</text><text x="285.0" y="375.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">custom resource</text><polyline points="275,338 275,254" fill="none" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="283" y="300" text-anchor="start" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">wires notifications</text><rect x="432" y="338" width="150" height="48" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="507.0" y="360.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Reader role</text><text x="507.0" y="375.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">sts:ExternalId</text><polyline points="360,362 428,362" fill="none" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="394" y="328" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">scopes GetObject</text><text x="34" y="420" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">Create / Update / Delete of the stack re-runs the manager:</text><text x="34" y="437" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">add a bucket = edit BucketNames, no new stack, key or queue.</text><rect x="700" y="126" width="160" height="48" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--accent)"/><text x="780.0" y="148.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Consumer</text><text x="780.0" y="163.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">thread per source</text><polyline points="700,150 586,150" fill="none" stroke-width="1.6" marker-end="url(#a-acc)" style="stroke:var(--accent)"/><text x="643" y="140" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">receive · delete</text><polyline points="780,126 780,76 275,76 275,84" fill="none" stroke-width="1.6" marker-end="url(#a-acc)" style="stroke:var(--accent)"/><text x="528" y="70" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">GetObject (after assume-role)</text><polyline points="700,164 682,164 682,362 586,362" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="620" y="404" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">AssumeRole + ExternalId</text><rect x="700" y="230" width="160" height="44" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="780.0" y="250.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Parsers</text><text x="780.0" y="265.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">one per log type</text><polyline points="820,174 820,226" fill="none" stroke-width="1.6" marker-end="url(#a-acc)" style="stroke:var(--accent)"/><text x="828" y="205" text-anchor="start" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">object bytes</text><rect x="880" y="300" width="90" height="44" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="925.0" y="320.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Sink</text><text x="925.0" y="335.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">kafka · file</text><polyline points="860,252 925,252 925,296" fill="none" stroke-width="1.6" marker-end="url(#a-acc)" style="stroke:var(--accent)"/><text x="900" y="244" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">events</text><text x="700" y="420" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">Message deleted only after the sink</text><text x="700" y="437" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">accepts every event (at-least-once).</text><line x1="700" y1="454" x2="700" y2="454" stroke="none"/></svg>
+      <div class="diagram"><svg viewBox="0 0 1000 470" role="img" aria-label="Event-driven ingestion: a bucket manager discovers the log buckets of the customer account and wires them to an SQS queue; a consumer in the ingesting account assumes a reader role, drains the queue, fetches each object and writes parsed events to a sink."><defs><marker id="a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--line)"/></marker><marker id="a-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--accent)"/></marker><marker id="a-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--warn)"/></marker></defs><rect x="16" y="40" width="620" height="414" rx="10" stroke-width="1" style="fill:var(--panel);stroke:var(--line)"/><text x="34" y="30" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="0.08em" style="fill:var(--muted)">CUSTOMER AWS ACCOUNT · ONE STACK PER ACCOUNT + REGION</text><text x="34" y="64" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="11" style="fill:var(--muted)">Shared template · stack log-ingest-&lt;account&gt;-&lt;region&gt;</text><rect x="664" y="40" width="320" height="414" rx="10" stroke-width="1" style="fill:var(--panel);stroke:var(--line)"/><text x="682" y="30" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="0.08em" style="fill:var(--muted)">INGESTING SIDE · RUNS ANYWHERE</text><rect x="34" y="96" width="132" height="38" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="100.0" y="119.5" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">CloudTrail</text><polyline points="166,115 206,115" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--line)"/><rect x="34" y="154" width="132" height="38" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="100.0" y="177.5" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">VPC Flow Logs</text><polyline points="166,173 206,173" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--line)"/><rect x="34" y="212" width="132" height="38" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="100.0" y="235.5" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">ALB · WAF · Config</text><polyline points="166,231 206,231" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="186" y="88" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">deliver</text><rect x="210" y="86" width="130" height="164" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="275.0" y="166.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">S3 log buckets</text><text x="275.0" y="181.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">discovered</text><polyline points="340,150 428,150" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--accent)"/><text x="384" y="140" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">ObjectCreated</text><text x="384" y="170" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">prefix filter</text><rect x="432" y="126" width="150" height="48" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--accent)"/><text x="507.0" y="148.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">SQS queue</text><text x="507.0" y="163.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">long-poll · SSE</text><polyline points="507,174 507,226" fill="none" stroke-width="1.6" marker-end="url(#a-warn)" style="stroke:var(--warn)"/><text x="517" y="205" text-anchor="start" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--warn)">after 5 failed receives</text><rect x="432" y="230" width="150" height="44" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--warn)"/><text x="507.0" y="250.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Dead-letter queue</text><text x="507.0" y="265.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">14-day hold</text><rect x="210" y="338" width="150" height="48" rx="6" stroke-width="1.4" stroke-dasharray="5 4" style="fill:var(--surface);stroke:var(--ink)"/><text x="285.0" y="360.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Bucket manager</text><text x="285.0" y="375.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">discover + wire</text><polyline points="275,338 275,254" fill="none" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="283" y="300" text-anchor="start" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">wires notifications</text><rect x="432" y="338" width="150" height="48" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="507.0" y="360.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Reader role</text><text x="507.0" y="375.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">sts:ExternalId</text><polyline points="360,362 428,362" fill="none" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="394" y="328" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">scopes GetObject</text><polyline points="210,362 100,362 100,254" fill="none" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="108" y="318" text-anchor="start" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">describe (read-only)</text><text x="34" y="420" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">Runs on stack create/update, daily if AutoRescan = Yes, or on demand.</text><text x="34" y="437" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">The customer only picks Yes/No dropdowns; nothing is typed.</text><rect x="700" y="126" width="160" height="48" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--accent)"/><text x="780.0" y="148.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Consumer</text><text x="780.0" y="163.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">thread per source</text><polyline points="700,150 586,150" fill="none" stroke-width="1.6" marker-end="url(#a-acc)" style="stroke:var(--accent)"/><text x="643" y="140" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">receive · delete</text><polyline points="780,126 780,76 275,76 275,84" fill="none" stroke-width="1.6" marker-end="url(#a-acc)" style="stroke:var(--accent)"/><text x="528" y="70" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">GetObject (after assume-role)</text><polyline points="700,164 682,164 682,362 586,362" fill="none" stroke-width="1.6" marker-end="url(#a-ink)" style="stroke:var(--line)"/><text x="620" y="404" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">AssumeRole + ExternalId</text><rect x="700" y="230" width="160" height="44" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="780.0" y="250.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Parsers</text><text x="780.0" y="265.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">one per log type</text><polyline points="820,174 820,226" fill="none" stroke-width="1.6" marker-end="url(#a-acc)" style="stroke:var(--accent)"/><text x="828" y="205" text-anchor="start" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">object bytes</text><rect x="880" y="300" width="90" height="44" rx="6" stroke-width="1.4" style="fill:var(--surface);stroke:var(--ink)"/><text x="925.0" y="320.0" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">Sink</text><text x="925.0" y="335.0" text-anchor="middle" font-family="'IBM Plex Mono', Menlo, Consolas, monospace" font-size="10.5" style="fill:var(--muted)">kafka · file</text><polyline points="860,252 925,252 925,296" fill="none" stroke-width="1.6" marker-end="url(#a-acc)" style="stroke:var(--accent)"/><text x="900" y="244" text-anchor="middle" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--accent)">events</text><text x="700" y="420" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">Message deleted only after the sink</text><text x="700" y="437" font-family="'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11.5" style="fill:var(--muted)">accepts every event (at-least-once).</text><line x1="700" y1="454" x2="700" y2="454" stroke="none"/></svg>
 </div>
       <figcaption>
-        <span class="key"><i class="acc"></i>data path</span><span class="key"><i class="warn"></i>failure path</span><span class="key"><i class="dash"></i>set up on stack create or update</span><br>
-        The bucket manager runs on every Create, Update and Delete of the stack. It wires the S3 notifications and rewrites the reader's policy, so changing the bucket list never needs a new stack, key or queue.
+        <span class="key"><i class="acc"></i>data path</span><span class="key"><i class="warn"></i>failure path</span><span class="key"><i class="dash"></i>discovery and setup</span><br>
+        Discovery reruns on every stack update, daily when the customer picks AutoRescan = Yes, or on demand. Buckets in another account or region are listed in the stack's SkippedSources output instead of being silently ignored.
       </figcaption>
     </figure>
   </section>
 
   <section aria-labelledby="build-h">
-    <div class="sec-head"><h2 id="build-h">Build an onboarding</h2>
-      <p class="note">The checks match the stack's own validation, so what passes here passes in CloudFormation.</p></div>
+    <div class="sec-head"><h2 id="build-h">Onboard a customer</h2>
+      <p class="note">What you enter here is the same for every customer except the name and the External ID, which is generated fresh for each one.</p></div>
     <div class="bench">
       <form class="card" id="f" autocomplete="off" novalidate>
-        <div class="example"><span id="exampleNote">Example values for a fictional source, acme-prod</span><button type="button" id="clear">Clear form</button></div>
+        <div class="example"><span id="exampleNote">Example values for a fictional customer, acme</span><button type="button" id="clear">Clear form</button></div>
         <fieldset>
-          <legend>Source</legend>
+          <legend>Customer</legend>
           <div class="row2">
-            <label for="tag">Source tag <span class="hint">3-30 chars, a-z 0-9 -</span><input id="tag" value="acme-prod" spellcheck="false"></label>
-            <label for="region">Bucket region
+            <label for="tenant">Customer name <span class="hint">your label, a-z 0-9 -</span><input id="tenant" value="acme" spellcheck="false"></label>
+            <label for="region">Their log region
               <select id="region">
                 <option>us-east-1</option><option>us-east-2</option><option>us-west-1</option><option>us-west-2</option>
                 <option>ca-central-1</option><option>eu-west-1</option><option>eu-west-2</option><option>eu-central-1</option>
                 <option>ap-south-1</option><option>ap-southeast-1</option><option>ap-southeast-2</option><option>ap-northeast-1</option><option>sa-east-1</option>
               </select></label>
           </div>
+          <label for="acct">Their AWS account ID <span class="hint">optional; they send it back from the Outputs tab</span><input id="acct" placeholder="444455556666" inputmode="numeric" spellcheck="false"></label>
+          <label for="ext">External ID <span class="hint">unique to this customer; keep it in your secret store</span>
+            <span class="inline"><input id="ext" spellcheck="false"><button type="button" id="regen">New</button></span></label>
         </fieldset>
         <fieldset>
-          <legend>Buckets</legend>
-          <div class="buckets" id="buckets">
-            <p class="hint">One row per bucket: name, then an optional key prefix (blank = whole bucket) and the parser.</p>
-          </div>
-          <div><button type="button" id="addBucket">Add bucket</button></div>
-          <label for="kms">KMS key ARNs <span class="hint">only if the logs use SSE-KMS; comma-separated</span><input id="kms" placeholder="arn:aws:kms:us-east-1:111122223333:key/…" spellcheck="false"></label>
+          <legend>Dropdowns, pre-selected in the link</legend>
+          <p class="hint">The customer sees these as Yes/No menus and can still change them.</p>
+          <div class="toggles" id="toggles"></div>
         </fieldset>
         <fieldset>
-          <legend>Access</legend>
-          <div class="modes" role="radiogroup">
-            <label class="mode" for="mRole"><input type="radio" name="mode" id="mRole" value="CrossAccountRole" checked><span><b>Cross-account role</b><span class="hint">Recommended. No long-lived secret.</span></span></label>
-            <label class="mode" for="mKey"><input type="radio" name="mode" id="mKey" value="AccessKey"><span><b>Access key</b><span class="hint">For consumers outside AWS. Key goes to Secrets Manager.</span></span></label>
-          </div>
-          <div id="roleFields" class="buckets">
-            <label for="principal">Your consumer's principal ARN <span class="hint">the role or account that will assume the reader role</span><input id="principal" value="arn:aws:iam::111122223333:role/log-ingest-consumer" spellcheck="false"></label>
-            <label for="ext">External ID <span class="hint">shared secret, keep it in your secret store</span>
-              <span class="inline"><input id="ext" spellcheck="false"><button type="button" id="regen">New</button></span></label>
-          </div>
+          <legend>Your side, same for every customer</legend>
+          <label for="tpl">Hosted template URL <span class="hint">S3 URL of your built onboarding-stack.yaml</span><input id="tpl" value="https://my-public-templates.s3.amazonaws.com/log-ingest/onboarding-stack.yaml" spellcheck="false"></label>
+          <label for="principal">Your consumer's principal ARN<input id="principal" value="arn:aws:iam::111122223333:role/log-ingest-consumer" spellcheck="false"></label>
         </fieldset>
       </form>
 
@@ -167,10 +165,10 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
         <div class="status" id="status"></div>
         <table class="params"><tbody id="params"></tbody></table>
         <div class="tabs" role="tablist" id="tabs">
-          <button class="tab" role="tab" aria-selected="true" data-t="prefill" id="t-prefill">Prefill command</button>
-          <button class="tab" role="tab" aria-selected="false" data-t="deploy" id="t-deploy">Deploy (CLI)</button>
+          <button class="tab" role="tab" aria-selected="true" data-t="link" id="t-link">Onboarding link</button>
+          <button class="tab" role="tab" aria-selected="false" data-t="cli" id="t-cli">onboard.py</button>
           <button class="tab" role="tab" aria-selected="false" data-t="config" id="t-config">Consumer config</button>
-          <button class="tab" role="tab" aria-selected="false" data-t="note" id="t-note">Note to the owner</button>
+          <button class="tab" role="tab" aria-selected="false" data-t="note" id="t-note">Note to the customer</button>
         </div>
         <div class="out"><pre id="out" role="tabpanel"></pre><button type="button" class="copy" id="copy">Copy</button></div>
         <p class="note" id="outHint"></p>
@@ -181,25 +179,25 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
   <section aria-labelledby="life-h">
     <div class="sec-head"><h2 id="life-h">After it's live</h2></div>
     <ol class="steps">
-      <li><h3>Add or remove a bucket</h3><span>The owner runs a stack <b>Update</b> with the new BucketNames. You edit the same bucket in <code>sources.yaml</code>. It's picked up within 30 s.</span></li>
-      <li><h3>A bucket is missing on your side</h3><span>The consumer logs a warning and leaves the message. It retries and then waits in the dead-letter queue for 14 days. Nothing is dropped silently.</span></li>
-      <li><h3>Redrive after a fix</h3><span><code>aws sqs start-message-move-task --source-arn &lt;dlq-arn&gt;</code> moves failed messages back to the main queue.</span></li>
-      <li><h3>Offboard</h3><span>The owner deletes the stack. That removes the queue, the role and the bucket notifications, and leaves other notifications alone.</span></li>
+      <li><h3>The customer adds a log source</h3><span>With AutoRescan = Yes it's wired within a day. Otherwise they run the <code>RescanNow</code> output command or update the stack. Nothing changes on your side.</span></li>
+      <li><h3>Logs in another account</h3><span>The stack names them in <code>SkippedSources</code>. The customer opens the same link in that account; add a second config entry with the same tenant.</span></li>
+      <li><h3>A file can't be classified</h3><span>The consumer leaves it on the queue with a warning. It retries, then waits 14 days in the dead-letter queue. Set <code>default_parser</code> to catch it.</span></li>
+      <li><h3>Offboard</h3><span>The customer deletes the stack. That removes the queue, the role and the notifications it added, and leaves their own notifications alone.</span></li>
     </ol>
   </section>
 
   <section aria-labelledby="ref-h">
-    <div class="sec-head"><h2 id="ref-h">Which logs can go straight in</h2>
-      <p class="note">Find each destination with the read-only call shown, or run <code>tools/discover_log_sources.py</code> to run them for you.</p></div>
+    <div class="sec-head"><h2 id="ref-h">What the stack discovers</h2>
+      <p class="note">These calls run inside the customer's account when the matching dropdown is Yes. <code>tools/discover_log_sources.py</code> runs the same calls from your laptop as a preview.</p></div>
     <div class="tablewrap"><table class="ref">
-      <thead><tr><th>Log type</th><th>S3 delivery</th><th>Parser</th><th>Where the bucket is reported</th></tr></thead>
+      <thead><tr><th>Dropdown</th><th>Found with</th><th>Consumer detects by key</th></tr></thead>
       <tbody>
-        <tr><td>CloudTrail</td><td class="yes">Native</td><td><code>cloudtrail</code></td><td><code>describe_trails</code> → S3BucketName, S3KeyPrefix</td></tr>
-        <tr><td>VPC Flow Logs</td><td class="yes">Native</td><td><code>vpc_flow</code></td><td><code>describe_flow_logs</code> → LogDestination</td></tr>
-        <tr><td>ALB access logs</td><td class="yes">Native</td><td><code>alb</code></td><td><code>describe_load_balancer_attributes</code> → access_logs.s3.*</td></tr>
-        <tr><td>WAF</td><td class="yes">Native</td><td><code>waf</code></td><td><code>get_logging_configuration</code> → LogDestinationConfigs</td></tr>
-        <tr><td>AWS Config</td><td class="yes">Native</td><td><code>jsonl</code></td><td><code>describe_delivery_channels</code> → s3BucketName</td></tr>
-        <tr><td>CloudWatch Logs groups</td><td class="no">Needs Firehose</td><td><code>jsonl</code></td><td>Subscription filter → Firehose → S3, then list that bucket</td></tr>
+        <tr><td>CloudTrail</td><td><code>describe_trails</code>, plus the Control Tower archive bucket by name</td><td><code>/CloudTrail/</code></td></tr>
+        <tr><td>VPC Flow Logs</td><td><code>describe_flow_logs</code> with an S3 destination</td><td><code>/vpcflowlogs/</code></td></tr>
+        <tr><td>Load balancer logs</td><td><code>describe_load_balancer_attributes</code> → access_logs.s3.*</td><td><code>/elasticloadbalancing/</code></td></tr>
+        <tr><td>WAF logs</td><td><code>get_logging_configuration</code> per web ACL</td><td><code>/WAFLogs/</code> or <code>aws-waf-logs-*</code></td></tr>
+        <tr><td>AWS Config</td><td><code>describe_delivery_channels</code></td><td><code>/Config/</code></td></tr>
+        <tr><td>KMS keys</td><td>Trail KmsKeyId and bucket default encryption</td><td class="no">added to the reader policy</td></tr>
       </tbody>
     </table></div>
   </section>
@@ -210,167 +208,123 @@ footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--rule)
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
-  const TAG = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
-  const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+  const TENANT = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
   const ARN = /^arn:aws[a-z-]*:iam::\d{12}:(root|role\/.+|user\/.+)$/;
-  const PARSERS = ["cloudtrail", "vpc_flow", "alb", "waf", "jsonl", "text"];
-  const EXAMPLE = [
-    { name: "acme-cloudtrail-logs", prefix: "AWSLogs/", parser: "cloudtrail" },
-    { name: "acme-vpc-flow-logs", prefix: "", parser: "vpc_flow" },
-    { name: "aws-waf-logs-acme", prefix: "", parser: "waf" },
+  const TOGGLES = [
+    ["IngestCloudTrail", "CloudTrail", "API activity", "Yes"],
+    ["IngestVpcFlowLogs", "VPC Flow Logs", "network traffic", "Yes"],
+    ["IngestLoadBalancerLogs", "Load balancer logs", "ALB access logs", "Yes"],
+    ["IngestWafLogs", "WAF logs", "web ACL traffic", "Yes"],
+    ["IngestConfigLogs", "AWS Config", "resource changes", "No"],
+    ["AutoRescan", "Auto-rescan daily", "wire new sources without an update", "No"],
   ];
-  let tab = "prefill";
+  let tab = "link";
 
   function newExternalId() {
     const b = new Uint8Array(24); crypto.getRandomValues(b);
     return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   }
 
-  function addRow(b = { name: "", prefix: "", parser: "cloudtrail" }) {
-    const i = $("buckets").querySelectorAll(".brow").length;
-    const row = document.createElement("div");
-    row.className = "brow";
-    row.innerHTML =
-      `<input class="bname" id="bn${i}" aria-label="Bucket name" spellcheck="false" placeholder="my-log-bucket">` +
-      `<input class="bprefix" id="bp${i}" aria-label="Prefix" spellcheck="false" placeholder="prefix (optional)">` +
-      `<select class="bparser" id="bs${i}" aria-label="Parser">${PARSERS.map(p => `<option>${p}</option>`).join("")}</select>` +
-      `<button type="button" class="x" aria-label="Remove bucket">✕</button>`;
-    row.querySelector(".bname").value = b.name;
-    row.querySelector(".bprefix").value = b.prefix;
-    row.querySelector(".bparser").value = b.parser;
-    row.querySelector(".x").addEventListener("click", () => { row.remove(); render(); });
-    $("buckets").appendChild(row);
-  }
+  $("toggles").innerHTML = TOGGLES.map(([id, name, what, def]) =>
+    `<label class="tog" for="${id}"><span>${name}<small>${what}</small></span>` +
+    `<select id="${id}"><option${def === "Yes" ? " selected" : ""}>Yes</option><option${def === "No" ? " selected" : ""}>No</option></select></label>`).join("");
 
   function read() {
-    const buckets = [...$("buckets").querySelectorAll(".brow")].map(r => ({
-      el: r.querySelector(".bname"),
-      name: r.querySelector(".bname").value.trim(),
-      prefix: r.querySelector(".bprefix").value.trim(),
-      parser: r.querySelector(".bparser").value,
-    })).filter(b => b.name || b.prefix);
-    return {
-      tag: $("tag").value.trim(), region: $("region").value, buckets,
-      kms: $("kms").value.split(",").map(s => s.trim()).filter(Boolean),
-      mode: document.querySelector('input[name="mode"]:checked').value,
-      principal: $("principal").value.trim(), ext: $("ext").value.trim(),
-    };
+    const t = {}; TOGGLES.forEach(([id]) => (t[id] = $(id).value));
+    return { tenant: $("tenant").value.trim(), region: $("region").value, acct: $("acct").value.trim(),
+             ext: $("ext").value.trim(), tpl: $("tpl").value.trim(), principal: $("principal").value.trim(), t };
   }
 
   function validate(s) {
     const errs = [];
-    const bad = (el, cond) => el && el.setAttribute("aria-invalid", cond ? "true" : "false");
-    bad($("tag"), !TAG.test(s.tag));
-    if (!TAG.test(s.tag)) errs.push("Source tag: 3-30 lowercase letters, digits or dashes");
-    if (!s.buckets.length) errs.push("Add at least one bucket");
-    const seen = new Set();
-    s.buckets.forEach(b => {
-      const invalid = !BUCKET.test(b.name) || seen.has(b.name);
-      bad(b.el, invalid);
-      if (!BUCKET.test(b.name)) errs.push(`"${b.name || "(blank)"}" isn't a valid bucket name`);
-      else if (seen.has(b.name)) errs.push(`${b.name} is listed twice`);
-      seen.add(b.name);
-    });
-    if (s.mode === "CrossAccountRole") {
-      bad($("principal"), !ARN.test(s.principal));
-      if (!ARN.test(s.principal)) errs.push("Principal ARN should look like arn:aws:iam::123456789012:role/name");
-      bad($("ext"), s.ext.length < 16);
-      if (s.ext.length < 16) errs.push("External ID: use at least 16 characters");
-    }
-    s.kms.forEach(k => { if (!/^arn:aws[a-z-]*:kms:/.test(k)) errs.push(`"${k}" isn't a KMS key ARN`); });
+    const mark = (id, bad) => $(id).setAttribute("aria-invalid", bad ? "true" : "false");
+    mark("tenant", !TENANT.test(s.tenant)); if (!TENANT.test(s.tenant)) errs.push("Customer name: 3-30 lowercase letters, digits or dashes");
+    mark("acct", s.acct && !/^\d{12}$/.test(s.acct)); if (s.acct && !/^\d{12}$/.test(s.acct)) errs.push("Account ID is 12 digits");
+    mark("ext", s.ext.length < 16); if (s.ext.length < 16) errs.push("External ID: use at least 16 characters");
+    mark("tpl", !/^https:\/\/[^ ]+\.ya?ml$/.test(s.tpl)); if (!/^https:\/\/[^ ]+\.ya?ml$/.test(s.tpl)) errs.push("Template URL should be an https URL ending in .yaml");
+    mark("principal", !ARN.test(s.principal)); if (!ARN.test(s.principal)) errs.push("Principal ARN should look like arn:aws:iam::123456789012:role/name");
     return errs;
   }
 
-  function derive(s) {
-    const prefixes = s.buckets.map(b => b.prefix || "NONE");
-    return {
-      stack: `log-ingest-${s.tag || "<tag>"}`,
-      names: s.buckets.map(b => b.name).join(","),
-      prefixes: prefixes.every(p => p === "NONE") ? "NONE" : prefixes.join(","),
-      kms: s.kms.join(",") || "NONE",
-      env: "EXTERNAL_ID_" + (s.tag || "TAG").toUpperCase().replace(/-/g, "_"),
-    };
+  function link(s) {
+    const q = new URLSearchParams({ templateURL: s.tpl, stackName: "log-ingest",
+      param_TrustedPrincipalArn: s.principal, param_ExternalId: s.ext });
+    TOGGLES.forEach(([id]) => q.set(`param_${id}`, s.t[id]));
+    return `https://${s.region}.console.aws.amazon.com/cloudformation/home?region=${s.region}#/stacks/quickcreate?${q}`;
   }
 
-  function outputs(s, d) {
-    const role = s.mode === "CrossAccountRole";
-    const bucketArgs = s.buckets.map(b => `  --bucket ${b.name}${b.prefix ? ":" + b.prefix : ""} \\`).join("\n");
-    const kmsArgs = s.kms.map(k => `  --kms-key ${k} \\`).join("\n");
-    const prefill = ["python3 tools/prefill_template.py \\", `  --source-tag ${s.tag} \\`, bucketArgs, kmsArgs,
-      role ? `  --trusted-principal ${s.principal} \\\n  --external-id "$${d.env}" \\` : "  --access-mode AccessKey \\",
-      `  --region ${s.region} --out ${s.tag}-onboarding.yaml`].filter(Boolean).join("\n");
-    const deploy = [`# Run inside the AWS account that owns the buckets, region ${s.region}`,
-      `aws cloudformation deploy \\`, `  --stack-name ${d.stack} \\`, `  --template-file ${s.tag}-onboarding.yaml \\`,
-      `  --capabilities CAPABILITY_NAMED_IAM \\`, `  --region ${s.region}`, ``,
-      `aws cloudformation describe-stacks --stack-name ${d.stack} --region ${s.region} \\`,
-      `  --query "Stacks[0].Outputs" --output table`].join("\n");
-    const auth = role
-      ? `    auth:\n      role_arn: arn:aws:iam::<ACCOUNT_ID>:role/${d.stack}-reader\n      external_id: \${${d.env}}`
-      : `    auth:\n      access_key_id: \${${d.env.replace("EXTERNAL_ID", "AWS_KEY_ID")}}\n      secret_access_key: \${${d.env.replace("EXTERNAL_ID", "AWS_SECRET")}}`;
-    const config = [`# config/sources.yaml  (replace <ACCOUNT_ID> once the stack exists)`, `sources:`,
-      `  - tenant: ${s.tag}`, `    region: ${s.region}`,
-      `    queue_url: https://sqs.${s.region}.amazonaws.com/<ACCOUNT_ID>/${d.stack}`, auth, `    buckets:`,
-      ...s.buckets.map(b => `      ${b.name}: ${b.parser}`)].join("\n");
-    const back = role ? "QueueUrl and ReaderRoleArn from the Outputs tab. Neither is a secret, so email is fine."
-      : "QueueUrl from the Outputs tab by email. Share the value of the ReaderAccessKeySecretArn secret only through the secure channel we agreed, never by email.";
+  function outputs(s) {
+    const env = "EXTERNAL_ID_" + s.tenant.toUpperCase().replace(/-/g, "_");
+    const base = s.acct ? `log-ingest-${s.acct}-${s.region}` : "";
+    const cli = [`export ${env}='${s.ext}'   # store this in your secret manager`, ``,
+      `python3 tools/onboard.py --tenant ${s.tenant} --region ${s.region} \\`,
+      `  --trusted-principal ${s.principal} \\`, `  --template-url ${s.tpl} \\`,
+      s.acct ? `  --account-id ${s.acct} \\` : null,
+      `  --log-types ${[["IngestCloudTrail","cloudtrail"],["IngestVpcFlowLogs","vpcflow"],["IngestLoadBalancerLogs","loadbalancer"],["IngestWafLogs","waf"],["IngestConfigLogs","config"]].filter(([id]) => s.t[id] === "Yes").map(([, f]) => f).join(",") || "none"} \\`,
+      `  --auto-rescan ${s.t.AutoRescan.toLowerCase()} \\`,
+      `  --external-id "$${env}"`].filter(l => l !== null).join("\n");
+    const config = [`# config/sources.yaml`, `sources:`, `  - tenant: ${s.tenant}`,
+      `    account_id: "${s.acct || "<AccountId from their Outputs tab>"}"`, `    region: ${s.region}`,
+      `    auth:`, `      external_id: \${${env}}`, `    buckets: auto   # log types detected from object keys`,
+      base ? `    # queue: https://sqs.${s.region}.amazonaws.com/${s.acct}/${base}\n    # role:  arn:aws:iam::${s.acct}:role/${base}-reader` : null]
+      .filter(l => l !== null).join("\n");
+    const picked = TOGGLES.slice(0, 5).filter(([id]) => s.t[id] === "Yes").map(([, n]) => n);
     const note = `Hi,
 
-To start sending your AWS logs to us, please deploy the attached CloudFormation template. It takes about 5 minutes.
+To start sharing your AWS logs with us, please open this link while signed in to the AWS account that stores them. It takes about 5 minutes.
 
-1. Sign in to the AWS account that owns these buckets: ${s.buckets.map(b => b.name).join(", ") || "(buckets)"}.
-2. Switch to region ${s.region} (top-right corner).
-3. Open CloudFormation, choose Create stack, then With new resources (standard), and upload ${s.tag}-onboarding.yaml.
-4. For Stack name, type: ${d.stack}. The other fields are already filled in; check that the bucket names look right.
-5. Choose Next twice, tick "I acknowledge that AWS CloudFormation might create IAM resources with custom names", then Submit.
-6. When it shows CREATE_COMPLETE, send us ${back}
+${link(s)}
 
-The stack only creates resources named ${d.stack}. It gives read access to the listed buckets and nothing else, and it keeps any bucket notifications you already have. To add or remove a bucket later, run an Update on this same stack. Please don't create a second one.
+1. Check the region in the top-right corner is where your logs are (${s.region}).
+2. Under "Which logs to share", we've pre-selected ${picked.length ? picked.join(", ") : "nothing yet"}. Change any Yes/No as you like. The stack finds where each log is stored, so you don't need bucket names.
+3. Choose whether to pick up new log sources automatically every day (we set ${s.t.AutoRescan}).
+4. Leave the Access section as it is, tick "I acknowledge that AWS CloudFormation might create IAM resources with custom names", and choose Create stack.
+5. When it shows CREATE_COMPLETE, open the Outputs tab and reply with the AccountId and Region values. They aren't secrets.
+
+If SkippedSources in the Outputs isn't "none", some logs are stored in another account or region. Open the same link there too.
+
+The stack only creates resources named log-ingest-<account>-<region>. It can read the log buckets it found and nothing else, and it keeps any bucket notifications you already have. To stop sharing, delete the stack.
 
 Thanks!`;
-    return { prefill, deploy, config, note };
+    return { link: link(s), cli, config, note };
   }
 
   const HINTS = {
-    prefill: "Run from the project root. It writes the pre-filled template and prints the same stack name.",
-    deploy: "For owners who prefer the CLI to the console. The second command prints the Outputs to send back.",
-    config: "Paste into config/sources.yaml. The consumer reloads it within 30 seconds, no restart.",
-    note: "Attach the generated template. The note mentions no internal systems, only what happens in their account.",
+    link: "Opens CloudFormation's Quick create page with the template, access settings and dropdown choices filled in.",
+    cli: "The same link from the command line, for scripting. Run from the project root.",
+    config: "Paste into config/sources.yaml once they send their account ID. Reloaded within 30 seconds.",
+    note: "Ready to send. It mentions only what happens in their account, not your systems.",
   };
 
   function render() {
     const s = read();
-    $("roleFields").hidden = s.mode !== "CrossAccountRole";
     const errs = validate(s);
-    const d = derive(s);
+    const on = TOGGLES.slice(0, 5).filter(([id]) => s.t[id] === "Yes").length;
     $("status").innerHTML = errs.length
       ? errs.map(e => `<span class="chip err">${e.replace(/</g, "&lt;")}</span>`).join("")
-      : `<span class="chip ok">Ready to send</span><span class="chip ${s.mode === "CrossAccountRole" ? "ok" : "warn"}">${s.mode === "CrossAccountRole" ? "No long-lived secret" : "Long-lived access key"}</span><span class="chip ok">${s.buckets.length} bucket${s.buckets.length === 1 ? "" : "s"} · 1 queue</span>`;
-    const rows = [["Stack name", d.stack], ["SourceTag", s.tag || "—"], ["BucketNames", d.names || "—"],
-      ["BucketPrefixes", d.prefixes], ["KmsKeyArns", d.kms], ["AccessMode", s.mode]];
-    if (s.mode === "CrossAccountRole") rows.push(["TrustedPrincipalArn", s.principal || "—"], ["ExternalId", s.ext ? s.ext.slice(0, 4) + "…" + s.ext.slice(-4) + " (full value in commands)" : "—"]);
+      : `<span class="chip ok">Ready to send</span><span class="chip ${on ? "ok" : "warn"}">${on} of 5 log types pre-selected</span><span class="chip ok">AutoRescan ${s.t.AutoRescan}</span>`;
+    const rows = [["Stack name", "log-ingest"], ["Resources", `log-ingest-${s.acct || "<account>"}-${s.region}`],
+      ["Buckets", "discovered by the stack"], ["TrustedPrincipalArn", s.principal || "—"],
+      ["ExternalId", s.ext ? s.ext.slice(0, 4) + "…" + s.ext.slice(-4) + " (full value in the link)" : "—"]];
     $("params").innerHTML = rows.map(([k, v]) => `<tr><th>${k}</th><td>${String(v).replace(/</g, "&lt;")}</td></tr>`).join("");
-    const o = outputs(s, d);
-    const text = errs.length ? "# Fix the items above to generate this output." : o[tab];
-    $("out").textContent = s.mode === "CrossAccountRole" && tab === "prefill" && !errs.length
-      ? `export ${d.env}='${s.ext}'   # store this in your secret manager\n\n` + text : text;
+    const o = outputs(s);
+    $("out").textContent = errs.length ? "# Fix the items above to generate this output." : o[tab];
     $("out").classList.toggle("wrap-text", tab === "note" && !errs.length);
+    $("out").classList.toggle("linkbox", tab === "link" && !errs.length);
     $("outHint").textContent = HINTS[tab];
-    try { localStorage.setItem("s3-onboarding-draft", JSON.stringify({ ...s, buckets: s.buckets.map(({ el, ...b }) => b) })); } catch (e) {}
+    try { localStorage.setItem("s3-onboarding-draft-v2", JSON.stringify(s)); } catch (e) {}
   }
 
   function load() {
     let saved = null;
-    try { saved = JSON.parse(localStorage.getItem("s3-onboarding-draft") || "null"); } catch (e) {}
-    if (saved && saved.buckets) {
-      $("tag").value = saved.tag || ""; $("region").value = saved.region || "us-east-1";
-      $("kms").value = (saved.kms || []).join(","); $("principal").value = saved.principal || "";
-      $("ext").value = saved.ext || newExternalId();
-      (saved.mode === "AccessKey" ? $("mKey") : $("mRole")).checked = true;
-      saved.buckets.forEach(addRow);
-      if (!saved.buckets.length) addRow();
+    try { saved = JSON.parse(localStorage.getItem("s3-onboarding-draft-v2") || "null"); } catch (e) {}
+    if (saved && saved.t) {
+      ["tenant", "acct", "ext", "tpl", "principal"].forEach(k => ($(k === "tenant" ? "tenant" : k).value = saved[k] || ""));
+      $("region").value = saved.region || "us-east-1";
+      TOGGLES.forEach(([id]) => saved.t[id] && ($(id).value = saved.t[id]));
+      if (!$("ext").value) $("ext").value = newExternalId();
       $("exampleNote").textContent = "Restored your last draft (saved in this browser only)";
     } else {
-      EXAMPLE.forEach(addRow);
       $("ext").value = newExternalId();
     }
   }
@@ -378,12 +332,10 @@ Thanks!`;
   $("f").addEventListener("input", render);
   $("f").addEventListener("change", render);
   $("f").addEventListener("submit", e => e.preventDefault());
-  $("addBucket").addEventListener("click", () => { addRow(); render(); });
   $("regen").addEventListener("click", () => { $("ext").value = newExternalId(); render(); });
   $("clear").addEventListener("click", () => {
-    $("tag").value = ""; $("kms").value = ""; $("principal").value = ""; $("ext").value = newExternalId();
-    $("buckets").querySelectorAll(".brow").forEach(r => r.remove()); addRow();
-    $("exampleNote").textContent = "Blank form";
+    $("tenant").value = ""; $("acct").value = ""; $("ext").value = newExternalId();
+    $("exampleNote").textContent = "New customer: the External ID is fresh, your template and principal are kept";
     render();
   });
   $("tabs").addEventListener("click", e => {

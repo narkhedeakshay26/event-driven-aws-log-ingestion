@@ -1,7 +1,7 @@
 import gzip
 import json
 
-from log_ingest.parsers import PARSERS
+from log_ingest.parsers import PARSERS, infer
 from log_ingest.worker import _gunzip
 
 
@@ -41,3 +41,21 @@ def test_alb_quoted_fields():
 def test_waf_and_jsonl_and_text():
     assert run("waf", b'{"action":"BLOCK"}\n\n{"action":"ALLOW"}\n') == [{"action": "BLOCK"}, {"action": "ALLOW"}]
     assert run("text", b"hello\nworld\n") == [{"message": "hello"}, {"message": "world"}]
+
+
+def test_aws_config_items():
+    doc = {"fileVersion": "1.0", "configurationItems": [{"resourceType": "AWS::S3::Bucket"}]}
+    assert run("aws_config", json.dumps(doc).encode()) == [{"resourceType": "AWS::S3::Bucket"}]
+    assert run("aws_config", b"{}", key="x/ConfigWritabilityCheckFile") == []
+
+
+def test_infer_from_aws_key_layout():
+    a = "AWSLogs/123456789012"
+    assert infer("b", f"o-abc/{a}/CloudTrail/us-east-1/2026/01/01/x.json.gz") == "cloudtrail"
+    assert infer("b", f"{a}/CloudTrail-Digest/us-east-1/x.json.gz") == "cloudtrail"
+    assert infer("b", f"vpc/{a}/vpcflowlogs/us-east-1/2026/01/01/x.log.gz") == "vpc_flow"
+    assert infer("b", f"web/{a}/elasticloadbalancing/us-east-1/2026/01/01/x.log.gz") == "alb"
+    assert infer("b", f"{a}/WAFLogs/us-east-1/acl/2026/x.log.gz") == "waf"
+    assert infer("aws-waf-logs-acme", "2026/01/01/x.gz") == "waf"
+    assert infer("b", f"{a}/Config/us-east-1/2026/1/1/ConfigHistory/x.json.gz") == "aws_config"
+    assert infer("b", "app/2026/x.log") is None

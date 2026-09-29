@@ -1,56 +1,63 @@
-# Onboarding guide for account owners
+# Onboarding guide for AWS account admins
 
-This is the page to send to the person who administers the AWS account where the logs are
-stored. It takes about 5 minutes and touches only resources named `log-ingest-<tag>`.
+This is the page to send with the onboarding link. It takes about 5 minutes and creates
+only resources named `log-ingest-<account>-<region>`.
 
 ## Before you start
 
 - You need permission to create CloudFormation stacks, IAM roles, SQS queues and Lambda
-  functions in this account.
-- **Use the account that owns the log buckets.** With AWS Organizations or Control Tower,
-  CloudTrail and Config logs often live in a separate **log archive** account, not in the
-  account where your workloads run.
-- **Use the bucket's region.** The stack must be in the same region as every bucket it lists.
+  functions.
+- **Use the account and region where the logs are stored.** With AWS Organizations or
+  Control Tower, CloudTrail and Config logs often live in a separate **log archive**
+  account. If your logs are in several accounts or regions, repeat these steps in each.
+  The link works for all of them.
 
 ## Steps
 
-1. Sign in to the AWS console for the account that owns the buckets, and choose the
-   buckets' region in the top-right corner.
-2. Open **CloudFormation → Create stack → With new resources (standard)**.
-3. Choose **Upload a template file**, select the file you were sent (for example
-   `acme-prod-onboarding.yaml`), and choose **Next**.
-4. For **Stack name**, type the name you were given (for example `log-ingest-acme-prod`).
-   The parameters are already filled in, so check that the bucket names look right, then
-   choose **Next**.
-5. Choose **Next** again. Tick **"I acknowledge that AWS CloudFormation might create IAM
-   resources with custom names"** and choose **Submit**.
-6. Wait for **CREATE_COMPLETE** (1–2 minutes), then open the **Outputs** tab.
-7. Send back **QueueUrl** and **ReaderRoleArn**. They aren't secrets and are safe to email.
+1. Sign in to the AWS console for the account that stores the logs.
+2. Open the **onboarding link** you were sent. It opens CloudFormation's **Quick create
+   stack** page, with the template and access settings already filled in.
+3. Check the region in the top-right corner is the one your logs are in, and change it
+   if not.
+4. Under **Which logs to share**, choose **Yes** or **No** for each log type. The stack
+   finds where they're stored; you don't need bucket names. Use **Other buckets** only
+   for logs AWS doesn't report, for example files copied in by Firehose.
+5. Under **Pick up new log sources automatically every day?**, choose:
+   - **Yes:** new trails, flow logs or load balancer logs you add later are shared
+     within a day, with nothing to do.
+   - **No:** nothing changes after today unless you update the stack.
+6. Leave **Access** as it is. Tick **"I acknowledge that AWS CloudFormation might create
+   IAM resources with custom names"** and choose **Create stack**.
+7. Wait for **CREATE_COMPLETE** (1–2 minutes), then open the **Outputs** tab:
+   - **WiredBuckets** lists what's now being shared.
+   - **SkippedSources** lists logs found but stored in another account or region. If
+     it's not `none`, repeat these steps there.
+8. Reply with the **AccountId** and **Region** values. They aren't secrets.
 
-If you were given an **AccessKey**-mode template instead, the Outputs show a
-`ReaderAccessKeySecretArn`. Open it in **Secrets Manager** and share its value **only
-through the secure channel** agreed with your contact, never by email or chat.
+## Later
 
-## Later: adding or removing a bucket
-
-Open the **same** stack, choose **Update → Use existing template → Next**, edit
-**BucketNames** (and **BucketPrefixes** if one is set), then submit. Don't create a second
-stack. Let your contact know, so their side lists the same buckets.
+- **Share more or fewer log types:** open the stack, choose **Update → Use existing
+  template**, change the dropdowns and submit.
+- **Share a new source now, instead of waiting for the daily scan:** run the command in
+  the **RescanNow** output, or open the Lambda function it names and choose **Test**.
+- **Stop sharing:** delete the stack. That removes the queue, the role and every
+  notification it added. Notifications you had before are left alone.
 
 ## What the stack does in your account
 
-- Creates one SQS queue and a dead-letter queue, both encrypted.
-- Adds an event notification (new objects only) to each listed bucket, alongside any
-  notifications you already have.
-- Creates a role that your contact's account can assume only with the agreed External ID.
-  It can read objects in the listed buckets and prefixes, and nothing else in the account.
-- Deleting the stack removes all of this, including the bucket notifications.
+- Reads where your logs are delivered, using describe calls only.
+- Creates one encrypted SQS queue and a dead-letter queue.
+- Adds a "new object" notification to each discovered log bucket, alongside any you
+  already have.
+- Creates a role that only the ingesting account can assume, and only with your
+  organization's External ID. It can read objects in the discovered buckets and nothing
+  else.
 
 ## If it fails
 
 | Message | Meaning | Fix |
 |---|---|---|
-| `BucketPrefixes has N entries, BucketNames has M` | Prefix list doesn't line up with the buckets | Use `NONE`, or one entry per bucket in the same order |
-| `Configurations overlap` | The bucket already sends new-object events for this prefix somewhere else | Ask your contact to set a narrower prefix |
-| `Unable to validate the following destination configurations` | Bucket is in another region, or in another account | Deploy in the bucket's region and account |
-| `Access Denied` on a bucket | The bucket policy blocks notification changes | Temporarily allow `s3:PutBucketNotification` for the stack, or apply it as a bucket admin |
+| `TrustedPrincipalArn is required` / `ExternalId is required` | The template was opened without the link | Use the link you were sent |
+| `Configurations overlap` | The bucket already sends new-object events for the same prefix elsewhere | Tell your contact which bucket; they'll suggest a narrower setup |
+| `Access Denied` on a bucket | A bucket policy blocks notification changes | Allow `s3:PutBucketNotification` for the stack, or run it as a bucket admin |
+| `SkippedSources` isn't `none` | Some logs are stored in another account or region | Repeat the steps there with the same link |

@@ -55,6 +55,14 @@ def alb(data, key):
         yield event
 
 
+def aws_config(data, key):
+    """Config history/snapshot files: one JSON document holding configurationItems."""
+    if "ConfigWritabilityCheckFile" in key:
+        return
+    doc = json.loads(data)
+    yield from doc.get("configurationItems", [])
+
+
 def text(data, key):
     for line in _lines(data):
         yield {"message": line}
@@ -65,6 +73,30 @@ PARSERS = {
     "vpc_flow": vpc_flow,
     "alb": alb,
     "waf": jsonl,        # WAF delivers newline-delimited JSON
+    "aws_config": aws_config,
     "jsonl": jsonl,
     "text": text,
 }
+
+# AWS writes each service's logs under a fixed path segment, so the log type can be
+# read from the object key. Order matters: first match wins.
+KEY_PATTERNS = [
+    ("/CloudTrail-Digest/", "cloudtrail"),     # the parser skips digests
+    ("/CloudTrail-Insight/", "cloudtrail"),
+    ("/CloudTrail/", "cloudtrail"),
+    ("/vpcflowlogs/", "vpc_flow"),
+    ("/elasticloadbalancing/", "alb"),
+    ("/WAFLogs/", "waf"),
+    ("/Config/", "aws_config"),
+]
+
+
+def infer(bucket, key):
+    """Best-effort log type from AWS's standard layout; None if it can't tell."""
+    path = "/" + key
+    for marker, kind in KEY_PATTERNS:
+        if marker in path:
+            return kind
+    if bucket.startswith("aws-waf-logs-"):
+        return "waf"
+    return None

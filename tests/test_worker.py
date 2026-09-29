@@ -33,6 +33,8 @@ def aws():
 def make_worker(url, tmp_path, buckets=None, auth=None):
     source = {"name": "acme", "tenant": "acme", "region": REGION, "queue_url": url,
               "buckets": buckets or {"trail-logs": "cloudtrail"}, "auth": auth or {}}
+    if buckets == "auto":
+        source["buckets"] = "auto"
     return SourceWorker(source, FileSink({"path": str(tmp_path / "out.jsonl")}))
 
 
@@ -99,26 +101,51 @@ def test_assumes_cross_account_role(aws, tmp_path):
     assert sqs_client.list_queues()["QueueUrls"]
 
 
-def test_full_chain_from_stack_wiring_to_sink(aws, tmp_path):
-    """Wire the bucket with the custom resource, upload a real object, let S3 emit the event."""
+def test_auto_mode_detects_log_type_from_key(aws, tmp_path):
     s3, sqs, url = aws
+    key = "org/AWSLogs/123456789012/CloudTrail/us-east-1/2026/01/01/a.json.gz"
+    s3.put_object(Bucket="trail-logs", Key=key, Body=gzip.compress(b'{"Records":[{"eventName":"X"}]}'))
+    s3.put_object(Bucket="trail-logs", Key="random/notes.bin", Body=b"??")
+    sqs.send_message(QueueUrl=url, MessageBody=s3_event("trail-logs", key))
+    sqs.send_message(QueueUrl=url, MessageBody=s3_event("trail-logs", "random/notes.bin"))
+    w = make_worker(url, tmp_path, buckets="auto")
+    w.run(once=True)
+    out = read_out(tmp_path)
+    assert [(e["log_type"], e["event"]["eventName"]) for e in out] == [("cloudtrail", "X")]
+    assert counts(sqs, url) == (0, 1)        # unknown layout: left for retry, not guessed
+
+
+def test_default_parser_catches_unrecognised_keys(aws, tmp_path):
+    s3, sqs, url = aws
+    s3.put_object(Bucket="trail-logs", Key="app/1.log", Body=b"hello\n")
+    sqs.send_message(QueueUrl=url, MessageBody=s3_event("trail-logs", "app/1.log"))
+    w = make_worker(url, tmp_path, buckets="auto")
+    w.source["default_parser"] = "text"
+    w.run(once=True)
+    assert [e["event"] for e in read_out(tmp_path)] == [{"message": "hello"}]
+
+
+def test_full_chain_from_discovery_to_sink(aws, tmp_path, monkeypatch):
+    """The stack's manager discovers the trail and wires it; a real upload then flows
+    through S3's own event into the consumer, which detects the log type itself."""
+    s3, sqs, url = aws
+    account = "123456789012"
+    boto3.client("cloudtrail", region_name=REGION).create_trail(
+        Name="main", S3BucketName="trail-logs", S3KeyPrefix="org")
+    boto3.client("iam", region_name=REGION).create_role(RoleName="reader", AssumeRolePolicyDocument="{}")
+    arn = sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["QueueArn"])["Attributes"]["QueueArn"]
+    for k, v in {"CONFIG_ID": "log-ingest-x", "QUEUE_ARN": arn, "ACCOUNT_ID": account, "REGION": REGION,
+                 "READER_ROLE": "reader", "INGEST_CLOUDTRAIL": "Yes", "ADDITIONAL_BUCKETS": "NONE"}.items():
+        monkeypatch.setenv(k, v)
     import bucket_manager
     mod = importlib.reload(bucket_manager)
-    mod.send = lambda *a, **k: None
-    iam = boto3.client("iam", region_name=REGION)
-    iam.create_role(RoleName="reader", AssumeRolePolicyDocument="{}")
-    arn = sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["QueueArn"])["Attributes"]["QueueArn"]
-    mod.handler({"RequestType": "Create", "StackId": "s", "RequestId": "r", "LogicalResourceId": "BucketWiring",
-                 "ResponseURL": "https://example.invalid",
-                 "ResourceProperties": {"ConfigId": "log-ingest-acme", "QueueArn": arn,
-                                        "BucketNames": ["trail-logs"], "BucketPrefixes": ["AWSLogs/"],
-                                        "KmsKeyArns": ["NONE"], "ReaderRoleName": "reader",
-                                        "ReaderUserName": ""}}, None)
+    mod._clients.clear()
+    assert mod.handler({}, None)["WiredBuckets"] == "trail-logs"
 
-    s3.put_object(Bucket="trail-logs", Key="other/ignored.json", Body=b'{"Records":[{"x":0}]}')
-    s3.put_object(Bucket="trail-logs", Key="AWSLogs/a.json.gz",
-                  Body=gzip.compress(b'{"Records":[{"eventName":"PutObject"}]}'))
+    s3.put_object(Bucket="trail-logs", Key="elsewhere/ignored.json", Body=b'{"Records":[{"x":0}]}')
+    key = f"org/AWSLogs/{account}/CloudTrail/{REGION}/2026/01/01/a.json.gz"
+    s3.put_object(Bucket="trail-logs", Key=key, Body=gzip.compress(b'{"Records":[{"eventName":"PutObject"}]}'))
 
-    make_worker(url, tmp_path).run(once=True)
+    make_worker(url, tmp_path, buckets="auto").run(once=True)
     out = read_out(tmp_path)
-    assert [e["s3"]["key"] for e in out] == ["AWSLogs/a.json.gz"]   # prefix filter honoured
+    assert [(e["s3"]["key"], e["log_type"]) for e in out] == [(key, "cloudtrail")]   # prefix filter honoured

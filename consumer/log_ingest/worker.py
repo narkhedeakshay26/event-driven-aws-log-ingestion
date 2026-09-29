@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from urllib.parse import unquote_plus
 
 from .aws import SourceSession
-from .parsers import PARSERS
+from .parsers import PARSERS, infer
 
 log = logging.getLogger("log_ingest")
 MAX_OBJECT_BYTES = 512 * 1024 * 1024
@@ -50,11 +50,23 @@ class SourceWorker:
             "event": event,
         }
 
+    def log_type(self, bucket, key):
+        """Explicit bucket map first, then AWS's key layout, then the source's default."""
+        buckets = self.source["buckets"]
+        if isinstance(buckets, dict):
+            if bucket in buckets:
+                return buckets[bucket]
+            if not self.source.get("default_parser"):
+                raise SkipMessage(f"bucket {bucket} is not in source {self.name}'s 'buckets' map "
+                                  "(added on the AWS side but not here yet?)")
+        kind = infer(bucket, key) or self.source.get("default_parser")
+        if not kind:
+            raise SkipMessage(f"can't tell the log type of {bucket}/{key}; add the bucket to "
+                              f"'buckets' or set 'default_parser' on source {self.name}")
+        return kind
+
     def process_object(self, s3, bucket, key, size=None):
-        log_type = self.source["buckets"].get(bucket)
-        if log_type is None:
-            raise SkipMessage(f"bucket {bucket} is not in source {self.name}'s 'buckets' map "
-                              "(added on the AWS side but not here yet?)")
+        log_type = self.log_type(bucket, key)
         if size and size > MAX_OBJECT_BYTES:
             raise SkipMessage(f"{bucket}/{key} is {size} bytes, over the {MAX_OBJECT_BYTES} limit")
         body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
@@ -109,8 +121,9 @@ class SourceWorker:
         return len(messages)
 
     def run(self, once=False):
-        log.info("[%s] consuming %s (%d buckets)", self.name, self.source["queue_url"],
-                 len(self.source["buckets"]))
+        b = self.source["buckets"]
+        log.info("[%s] consuming %s (%s)", self.name, self.source["queue_url"],
+                 "log types detected from object keys" if b == "auto" else f"{len(b)} buckets")
         backoff = 1
         while not self.stop_event.is_set():
             try:

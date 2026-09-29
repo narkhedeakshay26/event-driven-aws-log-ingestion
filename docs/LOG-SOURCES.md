@@ -1,15 +1,19 @@
 # Log sources
 
+The stack discovers these on its own when the matching dropdown is **Yes**, and the
+consumer detects each file's type from its key. The tables below are what that
+automation does, and how to check it by hand.
+
 ## Which AWS logs can be ingested with zero extra infrastructure
 
-| Log type | Delivers to S3 natively | Parser |
+| Log type | Delivers to S3 natively | Parser (auto-detected by key) |
 |---|---|---|
-| CloudTrail | Yes (a trail always writes to S3) | `cloudtrail` |
-| VPC Flow Logs | Yes, with the S3 destination | `vpc_flow` |
-| ALB access logs | Yes | `alb` |
+| CloudTrail | Yes (a trail always writes to S3) | `cloudtrail` (`/CloudTrail/`) |
+| VPC Flow Logs | Yes, with the S3 destination | `vpc_flow` (`/vpcflowlogs/`) |
+| ALB access logs | Yes | `alb` (`/elasticloadbalancing/`) |
 | NLB access logs (TLS listeners) | Yes | `text` (fields differ from ALB, add a parser if you need them split) |
-| WAF (regional and CloudFront) | Yes, to a bucket named `aws-waf-logs-*` | `waf` |
-| AWS Config | Yes | `jsonl` (snapshots and history files) |
+| WAF (regional and CloudFront) | Yes, to a bucket named `aws-waf-logs-*` | `waf` (`/WAFLogs/` or bucket name) |
+| AWS Config | Yes | `aws_config` (`/Config/`) |
 | Route 53 Resolver query logs | Yes | `jsonl` |
 | S3 server access logs | Yes | `text` |
 | CloudWatch Logs groups (Lambda, ECS, EKS, app logs) | **No**: needs a subscription filter to Firehose to S3 | `jsonl` |
@@ -17,7 +21,7 @@
 ## Finding the bucket and prefix, never guessing
 
 Every service reports its own destination through a read-only call.
-`tools/discover_log_sources.py` runs the first five of these for you:
+The bucket manager runs the first five inside the customer's account. `tools/discover_log_sources.py` runs the same calls from your laptop, as a preview:
 
 | Log type | Call | Read-only permission |
 |---|---|---|
@@ -43,9 +47,9 @@ the only clue:
 you're looking at the organization's management account. Control Tower's baseline trail
 will then write to a *different* account: the log archive.
 
-## Shared buckets need a prefix
+## Shared buckets
 
-A Control Tower log archive bucket holds CloudTrail, Config and more under different
-folders. Without a prefix filter, the `cloudtrail` parser would receive Config files.
-Use the `S3KeyPrefix` that `describe_trails` reports as that bucket's `BucketPrefixes`
-entry.
+A Control Tower log archive bucket holds CloudTrail, Config and more under per-account
+folders. An S3 prefix filter can't separate those, so the stack watches the whole bucket
+and the consumer routes each file by its key. Digest files and Config's writability
+checks are skipped.
